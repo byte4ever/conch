@@ -22,6 +22,7 @@ func sieveTimeGenerator(
 	ctx context.Context,
 	maxId int,
 ) <-chan *sieveTime {
+
 	outStream := make(chan *sieveTime)
 
 	go func() {
@@ -104,7 +105,7 @@ func Test_recBuildTeeTreeIdx(t *testing.T) {
 }
 
 /*
-func TestSieve2(t *testing.T) {
+Func TestSieve2(t *testing.T) {
 	const nbOutputs = 80
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -156,13 +157,13 @@ func TestSieveShit(t *testing.T) {
 }
 
 /*
-func choice[T any](inStream <-chan T, idx int) (_, _ <-chan T) {
+Func choice[T any](inStream <-chan T, idx int) (_, _ <-chan T) {
 	outStream1 := make(chan T, 1)
 	outStream2 := make(chan T, 1)
 
 	go func() {
-		defer close(outStream1)
-		defer close(outStream2)
+		defer closeMe(outStream1)
+		defer closeMe(outStream2)
 
 		for val := range inStream {
 			var out1, out2 = outStream1, outStream2
@@ -182,7 +183,7 @@ func choice[T any](inStream <-chan T, idx int) (_, _ <-chan T) {
 }
 */
 
-/*func Test_recBuildTeeTreeIdx(t *testing.T) {
+/*Func Test_recBuildTeeTreeIdx(t *testing.T) {
 	ctx := context.Background()
 	inStream := make(chan sieveItem[int])
 
@@ -256,5 +257,4 @@ func TestSieve2(t *testing.T) {
 
 	start.Done()
 	wg.Wait()
-
 }

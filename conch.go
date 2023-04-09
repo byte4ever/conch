@@ -1,13 +1,19 @@
 package conch
 
 import (
-	"container/heap"
 	"context"
 	"sync"
-	"time"
 
 	"github.com/byte4ever/conch/internal/ratelimit"
 )
+
+const replicaPanicMsg = "invalid mirror replicaCount"
+
+const zeroInputStreamsPanicMsg = "zero input streams"
+
+type Comparable interface {
+	LessThan(other Comparable) bool
+}
 
 type Generator[T any] func(context.Context) (output <-chan T, err error)
 
@@ -29,7 +35,7 @@ func DrainDo[T any](
 }
 
 // ContextBreaker creates an output stream that copy input stream and
-// that close when the context is done or input stream is closed.
+// that closeMe when the context is done or input stream is closed.
 //
 //	This is useful to cut properly stream flows, especially when down stream
 //	enter some operators that are no longer sensitive to context termination.
@@ -63,7 +69,7 @@ func WorkerPool[T any](
 ) (outputStream <-chan T, err error) {
 	le := len(egs)
 	if le == 0 {
-		return nil, nil //nolint:nilnil
+		return nil, nil //nolint:nilnil //dgas
 	}
 
 	inStreams := make([]<-chan T, le)
@@ -166,7 +172,7 @@ func unfairMerge[T any](
 		for {
 			switch {
 			case low == nil && high == nil:
-				// both of them are closed so close the output stream
+				// both of them are closed so closeMe the output stream
 				return
 
 			case low == nil:
@@ -232,7 +238,6 @@ func multiplex[T any](
 		case <-ctx.Done():
 			return
 		case outStream <- t:
-			// emit
 		}
 	}
 }
@@ -246,7 +251,7 @@ func tee[T any](inStream <-chan T) (_, _ <-chan T) {
 		defer close(outStream2)
 
 		for val := range inStream {
-			var out1, out2 = outStream1, outStream2
+			out1, out2 := outStream1, outStream2
 
 			for i := 0; i < 2; i++ {
 				select {
@@ -274,6 +279,7 @@ func recBuildTeeTree[T any](input <-chan T, outputs []<-chan T) {
 		var ot <-chan T
 		outputs[0], ot = tee(input)
 		outputs[1], outputs[2] = tee(ot)
+
 		return
 	}
 
@@ -299,7 +305,7 @@ func MirrorHighThroughput[T any](
 	replicaCount int,
 ) []<-chan T {
 	if replicaCount == 0 {
-		panic("invalid split replicaCount")
+		panic(replicaPanicMsg)
 	}
 
 	if replicaCount == 1 {
@@ -334,7 +340,7 @@ func MirrorLowLatency[T any](
 	replicaCount int,
 ) []<-chan T {
 	if replicaCount == 0 {
-		panic("invalid split replicaCount")
+		panic(replicaPanicMsg)
 	}
 
 	if replicaCount == 1 {
@@ -376,7 +382,7 @@ func FairFanIn[T any](
 	count := len(inStream)
 
 	if count == 0 {
-		panic("invalid priority count")
+		panic(zeroInputStreamsPanicMsg)
 	}
 
 	if count == 1 {
@@ -422,7 +428,7 @@ func UnfairFanIn[T any](
 	count := len(inStream)
 
 	if count == 0 {
-		panic("invalid priority count")
+		panic(zeroInputStreamsPanicMsg)
 	}
 
 	if count == 1 {
@@ -450,290 +456,6 @@ func UnfairFanIn[T any](
 	return outStream
 }
 
-type Comparable interface {
-	LessThan(other Comparable) bool
-}
-
-type queue []Comparable
-
-func (q queue) Len() int {
-	return len(q)
-}
-
-func (q queue) Less(i, j int) bool {
-	return q[i].LessThan(q[j])
-}
-
-func (q queue) Swap(i, j int) {
-	q[i], q[j] = q[j], q[i]
-}
-
-func (q *queue) Push(x any) {
-	item := x.(Comparable)
-	*q = append(*q, item)
-}
-
-func (q *queue) Pop() any {
-	old := *q
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = nil // avoid memory leak
-	*q = old[0 : n-1]
-
-	return item
-}
-
-type prioritizeOption struct {
-	backPressureDelay time.Duration
-	flushWhenDown     bool
-	bufferSize        int
-}
-
-var defaultPrioritizeOption = prioritizeOption{
-	backPressureDelay: 0,
-	flushWhenDown:     false,
-	bufferSize:        1000,
-}
-
-type PrioritizeOption interface {
-	apply(*prioritizeOption)
-}
-
-type backPressureDelayOption time.Duration
-
-func (b backPressureDelayOption) apply(option *prioritizeOption) {
-	option.backPressureDelay = time.Duration(b)
-}
-
-func WithBackPressureDelay(d time.Duration) PrioritizeOption {
-	return backPressureDelayOption(d)
-}
-
-type flushWhenDown struct{}
-
-func (b flushWhenDown) apply(option *prioritizeOption) {
-	option.flushWhenDown = true
-}
-
-func WithFlushWhenDown() PrioritizeOption {
-	return flushWhenDown{}
-}
-
-type bufferSize int
-
-func (b bufferSize) apply(option *prioritizeOption) {
-	option.bufferSize = int(b)
-}
-
-func WithBufferSize(d int) PrioritizeOption {
-	return bufferSize(d)
-}
-
-// Prioritize bufferize input stream into a priority queue and copy element
-// in output stream by priority order.
-func Prioritize[T Comparable](
-	ctx context.Context,
-	inStream <-chan T,
-	option ...PrioritizeOption,
-) <-chan T {
-	var (
-		mtx sync.Mutex
-		wg  sync.WaitGroup
-	)
-
-	opt := defaultPrioritizeOption
-	for _, o := range option {
-		o.apply(&opt)
-	}
-
-	availabilityStream := make(chan struct{}, opt.bufferSize)
-	pq := make(queue, 0, opt.bufferSize)
-	outStream := make(chan T)
-
-	wg.Add(2)
-
-	innerCtx, innerCancel := context.WithCancel(ctx)
-
-	go func() {
-		defer wg.Done()
-
-		delay := time.NewTimer(opt.backPressureDelay)
-
-		for {
-			select {
-			case <-delay.C:
-				for {
-					select {
-					case <-availabilityStream:
-						mtx.Lock()
-						item, _ := heap.Pop(&pq).(T) // nolint:errcheck
-						mtx.Unlock()
-
-						select {
-						case outStream <- item:
-						case <-innerCtx.Done():
-							mtx.Lock()
-							heap.Push(&pq, item)
-							mtx.Unlock()
-							availabilityStream <- struct{}{}
-
-							return
-						}
-
-					case <-innerCtx.Done():
-						return
-					}
-				}
-
-			case <-innerCtx.Done():
-				if !delay.Stop() {
-					<-delay.C
-				}
-				return
-			}
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		defer innerCancel()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case v, more := <-inStream:
-				if !more {
-					return
-				}
-				mtx.Lock()
-				heap.Push(&pq, v)
-				mtx.Unlock()
-
-				availabilityStream <- struct{}{}
-			}
-		}
-	}()
-
-	go func() {
-		wg.Wait()
-		defer close(outStream)
-		close(availabilityStream)
-
-		if opt.flushWhenDown {
-			for range availabilityStream {
-				item, _ := heap.Pop(&pq).(T) // nolint:errcheck
-				outStream <- item
-			}
-		}
-	}()
-
-	return outStream
-}
-
-type valveCtrl int8
-
-const (
-	valveOpenOP valveCtrl = iota
-	valveCloseOP
-)
-
-type valve struct {
-	blockingCtx context.Context
-	ctrl        chan valveCtrl
-}
-
-func ClosedValve[T any](
-	ctx context.Context, inStream <-chan T,
-) (func(), func(), <-chan T) {
-	var op valveCtrl
-	op = valveCloseOP
-
-	outStream, open, _close := buildValve(ctx, inStream, op)
-	return open, _close, outStream
-}
-
-func OpenedValve[T any](
-	ctx context.Context, inStream <-chan T,
-) (func(), func(), <-chan T) {
-	var op valveCtrl
-	op = valveOpenOP
-
-	outStream, open, _close := buildValve(ctx, inStream, op)
-	return open, _close, outStream
-}
-
-func buildValve[T any](
-	ctx context.Context,
-	inStream <-chan T,
-	op valveCtrl,
-) (
-	<-chan T, func(), func(),
-) {
-	outStream := make(chan T)
-	blockingCtx, blockingCancel := context.WithCancel(ctx)
-
-	innerValve := &valve{
-		blockingCtx: blockingCtx,
-		ctrl:        make(chan valveCtrl),
-	}
-
-	go func() {
-		defer close(outStream)
-		defer blockingCancel()
-
-		for {
-			switch op {
-			case valveOpenOP:
-				select {
-				case v, more := <-inStream:
-					if !more {
-						return
-					}
-
-					select {
-					case outStream <- v:
-					case <-ctx.Done():
-						return
-					}
-
-				case op = <-innerValve.ctrl:
-
-				case <-ctx.Done():
-					return
-				}
-			case valveCloseOP:
-				select {
-				case <-ctx.Done():
-					return
-				case op = <-innerValve.ctrl:
-				}
-
-			default:
-				panic("should never happen")
-			}
-		}
-	}()
-
-	open := innerValve.open
-	_close := innerValve.close
-
-	return outStream, open, _close
-}
-
-func (p *valve) open() {
-	select {
-	case p.ctrl <- valveOpenOP:
-	case <-p.blockingCtx.Done():
-	}
-}
-
-func (p *valve) close() {
-	select {
-	case p.ctrl <- valveCloseOP:
-	case <-p.blockingCtx.Done():
-	}
-}
 func RateLimit[T any](
 	ctx context.Context,
 	inStream <-chan T,

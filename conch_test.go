@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"sort"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
@@ -26,6 +24,7 @@ func TestTee(t *testing.T) {
 	)
 
 	defer cancel()
+
 	oStream, err := DummyTimeGenerator()(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, oStream)
@@ -95,18 +94,18 @@ func countAllAndDelay(input <-chan time.Time) {
 		<-output
 
 		// for _, input := range inputs {
-		// 	close(input)
+		// 	closeMe(input)
 		// }
 	}
 */
-type K int
+// type K int
+//
+// func (k K) LessThan(other Comparable) bool {
+// 	return k < other.(K)
+// }
 
-func (k K) LessThan(other Comparable) bool {
-	return k < other.(K)
-}
-
-func RandomGen(ctx context.Context) chan K {
-	outStream := make(chan K)
+func RandomGen(ctx context.Context) chan int {
+	outStream := make(chan int)
 
 	go func() {
 		defer close(outStream)
@@ -115,7 +114,7 @@ func RandomGen(ctx context.Context) chan K {
 			select {
 			case <-ctx.Done():
 				return
-			case outStream <- K(rand.Intn(10)):
+			case outStream <- rand.Intn(1000):
 			}
 		}
 	}()
@@ -123,12 +122,12 @@ func RandomGen(ctx context.Context) chan K {
 	return outStream
 }
 
-func RandomShuffled(startValue, count int) <-chan K {
-	outStream := make(chan K, count)
-	values := make([]K, count)
+func RandomShuffled(startValue, count int) <-chan int {
+	outStream := make(chan int, count)
+	values := make([]int, count)
 
 	for i := 0; i < count; i++ {
-		values[i] = K(startValue + i)
+		values[i] = startValue + i
 	}
 
 	for i := 0; i < 4; i++ {
@@ -150,169 +149,10 @@ func RandomShuffled(startValue, count int) <-chan K {
 	return outStream
 }
 
-func TestByPriority_Success(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	inCtx, inCancel := context.WithTimeout(
-		context.Background(),
-		time.Second,
-	)
-	defer inCancel()
-
-	inStream := RandomGen(inCtx)
-	out := Prioritize(
-		inCtx,
-		inStream,
-		WithBackPressureDelay(time.Millisecond),
-	)
-
-	var cnt int
-	for range out {
-		cnt++
-	}
-
-	t.Logf("got %d items", cnt)
-}
-
-func TestByPriority_CloseInput(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	inCtx, inCancel := context.WithCancel(
-		context.Background(),
-	)
-	defer inCancel()
-
-	inStream := RandomGen(inCtx)
-	out := Prioritize(
-		inCtx,
-		inStream,
-		WithBackPressureDelay(time.Millisecond),
-	)
-
-	inCancel()
-
-	var cnt int
-	for range out {
-		cnt++
-	}
-
-	require.Zerof(
-		t,
-		cnt,
-		"got %d items, must get 0 if input stream is closed before reading",
-		cnt,
-	)
-}
-
-func TestByPriority_Order(t *testing.T) {
-	const nbValues = 10
-
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	shuffled := RandomShuffled(0, nbValues)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	outStream := Prioritize(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(10*time.Millisecond),
-		WithBufferSize(nbValues),
-		WithFlushWhenDown(),
-	)
-
-	cnt := 0
-
-	for k := range outStream {
-		require.Equal(t, k, K(cnt))
-		cnt++
-	}
-
-	require.Equal(t, nbValues, cnt)
-}
-
-func TestByPriority_QuickCancel(t *testing.T) {
-	const nbValues = 10
-
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	shuffled := RandomShuffled(0, nbValues)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	outStream := Prioritize(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(1*time.Second),
-		WithBufferSize(nbValues),
-	)
-
-	cancel()
-
-	for range outStream {
-		require.FailNow(
-			t,
-			"should not get any items",
-		)
-		// drain outstream
-	}
-}
-
-func TestByPriority_PartialOrder(t *testing.T) {
-	const nbValues = 100
-
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	shuffled := RandomShuffled(0, nbValues)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	outStream := Prioritize(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(1000*time.Millisecond),
-		WithBufferSize(nbValues/7),
-		WithFlushWhenDown(),
-	)
-
-	values := make([]int, nbValues)
-
-	cnt := 0
-
-	for k := range outStream {
-		values[cnt] = int(k)
-		cnt++
-	}
-
-	if !assert.Equal(t, nbValues, cnt) {
-		// print values
-		for i, v := range values {
-			t.Logf("got %5d %5d", i, v)
-		}
-	}
-
-	valKeep := make([]int, nbValues)
-	copy(valKeep, values)
-	sort.Ints(values)
-	require.Equal(t, 0, values[0])
-	require.Equal(t, nbValues-1, values[len(values)-1])
-
-	for i, value := range values {
-		// fmt.Println(i, value)
-		if !assert.Equal(t, i, value) {
-			for i, value := range values {
-				fmt.Println(i, value, valKeep[i])
-			}
-			break
-		}
-	}
-}
-
 func sameGenerator[T any](
-	ctx context.Context, id T, wg *sync.WaitGroup,
+	ctx context.Context,
+	id T,
+	wg *sync.WaitGroup,
 ) chan T {
 	outStream := make(chan T)
 
@@ -393,6 +233,7 @@ func TestFairPriority(t *testing.T) {
 	defer cancel()
 
 	var wg sync.WaitGroup
+
 	wg.Add(1)
 
 	inStreams := make([]<-chan int, nbPrio)
@@ -432,6 +273,7 @@ func IntSequenceGenerator(
 	minValue,
 	maxValue int,
 ) Generator[int] {
+
 	return func(ctx context.Context) (<-chan int, error) {
 		output := make(chan int)
 
@@ -499,6 +341,7 @@ func DelayTimeGenerator(d time.Duration) Generator[time.Time] {
 						if !timer.Stop() {
 							<-timer.C
 						}
+
 						return
 					}
 				}
@@ -529,54 +372,6 @@ func DummyGenerator() Generator[struct{}] {
 	}
 }
 
-func TestOpenedValve(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	tsStream, _ := DelayTimeGenerator(200 * time.Millisecond)(ctx)
-	openValve, closeValve, out := OpenedValve(ctx, tsStream)
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-
-		for t2 := range out {
-			fmt.Println(t2)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		var isClosed bool
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(2 * time.Second):
-				if isClosed {
-					fmt.Println("open ---------------------------")
-					os.Stdout.Sync()
-					openValve()
-					isClosed = false
-				} else {
-					closeValve()
-					fmt.Println("closed ---------------------------")
-					os.Stdout.Sync()
-					isClosed = true
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
-}
-
 func TestRateLimit(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
@@ -588,7 +383,7 @@ func TestRateLimit(t *testing.T) {
 
 	timeOutStream, _ := DummyTimeGenerator()(ctx)
 
-	openValve, closeValve, valveOutStream := OpenedValve(ctx, timeOutStream)
+	openValve, closeValve, valveOutStream := Valve(ctx, timeOutStream, true)
 
 	rateLimitedOutStream := RateLimit(
 		ctx,
@@ -599,6 +394,7 @@ func TestRateLimit(t *testing.T) {
 	)
 
 	var wg sync.WaitGroup
+
 	wg.Add(2)
 
 	go func() {
@@ -612,7 +408,7 @@ func TestRateLimit(t *testing.T) {
 				return
 			case <-time.After(2 * time.Second):
 				if isClosed {
-					fmt.Println("open ---------------------------")
+					fmt.Println("openMe ---------------------------")
 					os.Stdout.Sync()
 					openValve()
 					isClosed = false
@@ -628,6 +424,7 @@ func TestRateLimit(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
+
 		for s := range rateLimitedOutStream {
 			fmt.Println(s)
 		}

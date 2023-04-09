@@ -50,7 +50,6 @@ func (b *FileHashProcessorBuilder) BuildProcessor() conch.Generator[*FileHashRes
 					hasher := request.Hasher.New()
 
 					f, err := os.Open(request.Path)
-
 					if err != nil {
 						select {
 						case outStream <- &FileHashResponse{

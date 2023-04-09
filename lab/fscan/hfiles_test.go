@@ -6,11 +6,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/byte4ever/conch"
 	"github.com/dustin/go-humanize"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-
-	"github.com/byte4ever/conch"
 )
 
 func TestPathGenerator(t *testing.T) {
@@ -55,5 +54,4 @@ func TestPathGenerator(t *testing.T) {
 			// float64(resp.Size)/(resp.Duration.Seconds()*1024*1024),
 		)
 	}
-
 }

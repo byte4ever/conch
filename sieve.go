@@ -46,7 +46,6 @@ func Sieve[T any](
 				}
 			}
 		}
-
 	}()
 
 	outStreamsDir := make([]<-chan T, count)
