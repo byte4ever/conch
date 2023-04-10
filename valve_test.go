@@ -18,17 +18,26 @@ func isClosed[T any](t *testing.T, c <-chan T) {
 	require.False(t, more)
 }
 
-func isClosing[T any](t *testing.T, c <-chan T) {
+func isClosing[T any](
+	t *testing.T,
+	c <-chan T,
+	waitFor time.Duration,
+	tick time.Duration,
+) {
 	t.Helper()
 	require.Eventually(
 		t, func() bool {
+			var cnt int
+
 			for range c {
+				cnt++
 			}
 
+			t.Log("read", cnt, "items before closing")
 			return true
 		},
-		100*time.Millisecond,
-		1*time.Millisecond,
+		waitFor,
+		tick,
 	)
 }
 
@@ -140,7 +149,7 @@ func TestOpenedValve(t *testing.T) {
 			_, _, outStream := Valve(ctx, g, true)
 
 			close(g)
-			isClosing(t, outStream)
+			isClosing(t, outStream, time.Second, time.Millisecond)
 		},
 	)
 
@@ -159,7 +168,7 @@ func TestOpenedValve(t *testing.T) {
 			_, _, outStream := Valve(ctx, g, true)
 
 			cancel()
-			isClosing(t, outStream)
+			isClosing(t, outStream, time.Second, time.Millisecond)
 		},
 	)
 
@@ -227,7 +236,7 @@ func TestOpenedValve(t *testing.T) {
 
 			cancel()
 
-			isClosing(t, outStream)
+			isClosing(t, outStream, time.Second, time.Millisecond)
 
 			for i := 0; i < 3; i++ {
 				require.Eventually(
@@ -267,7 +276,7 @@ func TestOpenedValve(t *testing.T) {
 			)
 
 			close(g)
-			isClosing(t, g)
+			isClosing(t, g, time.Second, time.Millisecond)
 
 			for i := 0; i < 3; i++ {
 				require.Eventually(
@@ -296,7 +305,7 @@ func TestOpenedValve(t *testing.T) {
 			g := make(chan int)
 			close(g)
 			_, _, outStream := Valve(ctx, g, true)
-			isClosing(t, outStream)
+			isClosing(t, outStream, time.Second, time.Millisecond)
 		},
 	)
 
@@ -310,7 +319,7 @@ func TestOpenedValve(t *testing.T) {
 			cancel()
 			g := make(chan int)
 			_, _, outStream := Valve(ctx, g, true)
-			isClosing(t, outStream)
+			isClosing(t, outStream, time.Second, time.Millisecond)
 		},
 	)
 

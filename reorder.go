@@ -3,60 +3,78 @@ package conch
 import (
 	"container/heap"
 	"context"
-	"time"
 )
 
 type (
-	prioritizeOption struct {
-		backPressureDelay time.Duration
-		flushWhenDown     bool
-		bufferSize        int
-		reverseOrder      bool
+	reorderOptions struct {
+		bufferSize   int
+		reverseOrder bool
 	}
-
 	// ReorderOption defines options for Reorder.
 	ReorderOption interface {
-		apply(*prioritizeOption)
+		apply(*reorderOptions)
 	}
-
-	backPressureDelayOption time.Duration
 
 	reverseOrder struct{}
 
 	bufferSize int
 
-	revOrder[Priority Ordered, Payload any] []Indexed[Priority, Payload]
+	revOrder[Priority Ordered, Payload any]           []Indexed[Priority, Payload]
+	inOrder[Priority Ordered, Payload any]            []Indexed[Priority, Payload]
+	internalHeapInterface[Index Ordered, Payload any] interface {
+		heap.Interface
 
-	inOrder[Priority Ordered, Payload any] []Indexed[Priority, Payload]
+		NextToPop() Indexed[Index, Payload]
+	}
 )
 
-func (q *inOrder[Priority, Payload]) ToPop() Indexed[Priority, Payload] {
+const (
+	defaultPrioritizeBufferSize = 10_000 // is the default buffer size
+)
+
+var (
+	defaultPrioritizeOption = reorderOptions{
+		// default buffer size
+		bufferSize: defaultPrioritizeBufferSize,
+
+		// not in reverse order
+		reverseOrder: false,
+	}
+
+	// Check queues compatibility with heap.Interface.
+	_ internalHeapInterface[int, any] = &inOrder[int, any]{}
+	_ internalHeapInterface[int, any] = &revOrder[int, any]{}
+)
+
+//goland:noinspection ALL
+func (q *inOrder[Priority, Payload]) NextToPop() Indexed[Priority, Payload] {
 	return (*q)[0]
 }
 
-func (q *revOrder[Priority, Payload]) ToPop() Indexed[Priority, Payload] {
+//goland:noinspection GoMixedReceiverTypes
+func (q *revOrder[Priority, Payload]) NextToPop() Indexed[Priority, Payload] {
 	return (*q)[0]
 }
 
 // Len implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *inOrder[Priority, Payload]) Len() int {
-	return len(*q)
+func (q inOrder[Priority, Payload]) Len() int {
+	return len(q)
 }
 
 // Less implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *inOrder[Priority, Payload]) Less(i, j int) bool {
-	return (*q)[i].Index < (*q)[j].Index
+func (q inOrder[Priority, Payload]) Less(i, j int) bool {
+	return q[i].Index < q[j].Index
 }
 
 // Swap implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *inOrder[Priority, Payload]) Swap(i, j int) {
-	(*q)[i], (*q)[j] = (*q)[j], (*q)[i]
+func (q inOrder[Priority, Payload]) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
 }
 
 // Push implements heap.Interface.
@@ -71,11 +89,12 @@ func (q *inOrder[Priority, Payload]) Push(x any) {
 //
 //goland:noinspection GoMixedReceiverTypes
 func (q *inOrder[Priority, Payload]) Pop() any {
-	old := *q
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = Indexed[Priority, Payload]{} // avoid memory leak
-	*q = old[0 : n-1]
+	var zero Payload
+
+	n := len(*q)
+	item := (*q)[n-1]
+	(*q)[n-1].Payload = zero // avoid memory leak
+	*q = (*q)[0 : n-1]
 
 	return item
 }
@@ -83,22 +102,22 @@ func (q *inOrder[Priority, Payload]) Pop() any {
 // Len implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *revOrder[Priority, Payload]) Len() int {
-	return len(*q)
+func (q revOrder[Priority, Payload]) Len() int {
+	return len(q)
 }
 
 // Less implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *revOrder[Priority, Payload]) Less(i, j int) bool {
-	return (*q)[i].Index > (*q)[j].Index
+func (q revOrder[Priority, Payload]) Less(i, j int) bool {
+	return q[i].Index > q[j].Index
 }
 
 // Swap implements heap.Interface.
 //
 //goland:noinspection GoMixedReceiverTypes
-func (q *revOrder[Priority, Payload]) Swap(i, j int) {
-	(*q)[i], (*q)[j] = (*q)[j], (*q)[i]
+func (q revOrder[Priority, Payload]) Swap(i, j int) {
+	q[i], q[j] = q[j], q[i]
 }
 
 // Push implements heap.Interface.
@@ -113,49 +132,17 @@ func (q *revOrder[Priority, Payload]) Push(x any) {
 //
 //goland:noinspection GoMixedReceiverTypes
 func (q *revOrder[Priority, Payload]) Pop() any {
-	old := *q
-	n := len(old)
-	item := old[n-1]
-	old[n-1] = Indexed[Priority, Payload]{} // avoid memory leak
-	*q = old[0 : n-1]
+	var zero Payload
+
+	n := len(*q)
+	item := (*q)[n-1]
+	(*q)[n-1].Payload = zero // avoid memory leak
+	*q = (*q)[0 : n-1]
 
 	return item
 }
 
-const (
-	defaultPrioritizeBufferSize = 1000 // is the default buffer size
-)
-
-var (
-	defaultPrioritizeOption = prioritizeOption{
-		// no back pressure delay
-		backPressureDelay: 0,
-
-		// buffer size is 100
-		bufferSize: defaultPrioritizeBufferSize,
-
-		// not in reverse order
-		reverseOrder: false,
-	}
-
-	// Check queues compatibility with heap.Interface.
-	_ MyI[int, any] = &inOrder[int, any]{}
-	_ MyI[int, any] = &revOrder[int, any]{}
-)
-
-func (b backPressureDelayOption) apply(option *prioritizeOption) {
-	option.backPressureDelay = time.Duration(b)
-}
-
-// WithBackPressureDelay force internal back pressure on stream by inducing
-// some delay latency  in reordering.
-// This helps to fill internal buffer when using reordering as a priority
-// stream.
-func WithBackPressureDelay(d time.Duration) ReorderOption {
-	return backPressureDelayOption(d)
-}
-
-func (b bufferSize) apply(option *prioritizeOption) {
+func (b bufferSize) apply(option *reorderOptions) {
 	option.bufferSize = int(b)
 }
 
@@ -164,18 +151,13 @@ func WithBufferSize(d int) ReorderOption {
 	return bufferSize(d)
 }
 
-func (b reverseOrder) apply(option *prioritizeOption) {
+func (b reverseOrder) apply(option *reorderOptions) {
 	option.reverseOrder = true
 }
 
 // WithOrderReversed option for reversing order.
 func WithOrderReversed() ReorderOption {
 	return reverseOrder{}
-}
-
-type MyI[Index Ordered, Payload any] interface {
-	heap.Interface
-	ToPop() Indexed[Index, Payload]
 }
 
 // Reorder bufferize indexed input stream.
@@ -186,7 +168,6 @@ func Reorder[Value Ordered, Payload any](
 	inStream <-chan Indexed[Value, Payload],
 	option ...ReorderOption,
 ) <-chan Indexed[Value, Payload] {
-
 	outStream := make(chan Indexed[Value, Payload])
 
 	opt := defaultPrioritizeOption
@@ -194,7 +175,7 @@ func Reorder[Value Ordered, Payload any](
 		o.apply(&opt)
 	}
 
-	var pq MyI[Value, Payload]
+	var pq internalHeapInterface[Value, Payload]
 
 	if opt.reverseOrder {
 		l := make(revOrder[Value, Payload], 0, opt.bufferSize)
@@ -209,7 +190,7 @@ func Reorder[Value Ordered, Payload any](
 		defer close(outStream)
 		defer func() {
 			for ctx.Err() == nil && pq.Len() > 0 {
-				v := heap.Pop(pq).(Indexed[Value, Payload])
+				v, _ := heap.Pop(pq).(Indexed[Value, Payload])
 
 				select {
 				case outStream <- v:
@@ -223,7 +204,8 @@ func Reorder[Value Ordered, Payload any](
 			// fmt.Println(pq)
 			switch {
 			case pq.Len() == opt.bufferSize:
-				v := heap.Pop(pq).(Indexed[Value, Payload])
+				v, _ := heap.Pop(pq).(Indexed[Value, Payload])
+
 				select {
 				case outStream <- v:
 				case <-ctx.Done():
@@ -236,13 +218,14 @@ func Reorder[Value Ordered, Payload any](
 					if !more {
 						return
 					}
+
 					heap.Push(pq, v)
 
 				case <-ctx.Done():
 					return
 				}
 			default:
-				v := pq.ToPop()
+				v := pq.NextToPop()
 
 				select {
 				case v2, more := <-inStream:

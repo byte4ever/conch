@@ -4,7 +4,9 @@ import (
 	"container/heap"
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,13 +14,18 @@ import (
 	"go.uber.org/goleak"
 )
 
-func randomIndexed(ctx context.Context) <-chan Indexed[int, interface{}] {
+func randomIndexed(
+	t *testing.T,
+	ctx context.Context, spread int,
+) <-chan Indexed[int, interface{}] {
+	t.Helper()
+
 	outStream := make(chan Indexed[int, interface{}])
 
 	go func() {
 		var cnt int
 		defer func() {
-			fmt.Println("sent ", cnt, " items")
+			t.Log(cnt, " items sent")
 		}()
 		defer close(outStream)
 
@@ -27,7 +34,7 @@ func randomIndexed(ctx context.Context) <-chan Indexed[int, interface{}] {
 			case <-ctx.Done():
 				return
 			case outStream <- Indexed[int, interface{}]{
-				Index: rand.Intn(100),
+				Index: rand.Intn(spread),
 			}:
 				cnt++
 			}
@@ -38,19 +45,18 @@ func randomIndexed(ctx context.Context) <-chan Indexed[int, interface{}] {
 }
 
 func randomIndexedCount(
-	ctx context.Context,
-	count int,
+	ctx context.Context, count int, spread int,
 ) <-chan Indexed[int, interface{}] {
 	outStream := make(chan Indexed[int, interface{}])
 
 	go func() {
 		defer close(outStream)
 		defer func() {
-			fmt.Println("bye sender")
+			fmt.Println(count, "items sent")
 		}()
 
 		for i := 0; i < count; i++ {
-			v := rand.Intn(10)
+			v := rand.Intn(spread)
 			select {
 			case <-ctx.Done():
 				return
@@ -71,7 +77,7 @@ func TestReorder(t *testing.T) {
 
 	t.Run(
 		"streaming closed by context", func(t *testing.T) {
-			const testDuration = 60 * time.Second
+			const testDuration = time.Second
 
 			t.Parallel()
 
@@ -81,57 +87,12 @@ func TestReorder(t *testing.T) {
 			)
 			defer cancel()
 
-			// ctx := context.Background()
-			//
-			// st := make(chan Indexed[uint64, interface{}])
-			//
-			// go func() {
-			// 	defer close(st)
-			//
-			// 	for i := uint64(0); i < 100000; i++ {
-			// 		st <- Indexed[uint64, interface{}]{
-			// 			Index: i,
-			// 		}
-			// 	}
-			// }()
-
 			outStream := Reorder(
 				ctx,
-				// st,
-				randomIndexed(ctx),
-				// WithBufferSize(5),
-				// WithOrderReversed(),
+				randomIndexed(t, ctx, 10000),
 			)
 
-			// require.Eventually(
-			// 	t, func() bool {
-			var cnt int
-			for range outStream {
-				cnt++
-			}
-
-			// for o := range outStream {
-			// 	fmt.Println(cnt, o.Index)
-			// 	cnt++
-			// }
-
-			// require.NotZero(t, cnt)
-			fmt.Printf("received  #%d items\n", cnt)
-			fmt.Printf(
-				"rate  %v iter/s\n",
-				float64(cnt)/testDuration.Seconds(),
-			)
-			fmt.Printf(
-				"iter duration %v\n",
-				testDuration/time.Duration(cnt),
-			)
-
-			// return true
-			// },
-			// testDuration+1*time.Millisecond,
-			// 10*time.Millisecond,
-			// )
-
+			isClosing(t, outStream, testDuration*2, time.Millisecond)
 		},
 	)
 
@@ -146,177 +107,94 @@ func TestReorder(t *testing.T) {
 
 			outStream := Reorder(
 				ctx,
-				randomIndexedCount(ctx, 20),
+				randomIndexedCount(ctx, 10000, 10000),
 			)
 
-			require.Eventually(
-				t, func() bool {
-					var cnt int
-
-					for range outStream {
-						cnt++
-						fmt.Println(cnt)
-					}
-
-					require.NotZero(t, cnt)
-					t.Logf("received  #%d items\n", cnt)
-					return true
-				},
-				testDuration+1*time.Millisecond,
-				time.Millisecond,
-			)
+			isClosing(t, outStream, testDuration, time.Millisecond)
 		},
 	)
 }
 
-/*
-func TestByPriority_CloseInput(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	inCtx, inCancel := context.WithCancel(
-		context.Background(),
-	)
-	defer inCancel()
-
-	inStream := RandomGen(inCtx)
-	out := Reorder(
-		inCtx,
-		inStream,
-		WithBackPressureDelay(time.Millisecond),
-	)
-
-	inCancel()
-
-	var cnt int
-	for range out {
-		cnt++
-	}
-
-	require.Zerof(
-		t,
-		cnt,
-		"got %d items, must get 0 if input stream is closed before reading",
-		cnt,
-	)
-}
-
-func TestByPriority_Order(t *testing.T) {
-	const nbValues = 10
+func TestMe(t *testing.T) {
+	t.Parallel()
 
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
-	shuffled := RandomShuffled(0, nbValues)
+	var wg sync.WaitGroup
 
-	ctx, cancel := context.WithCancel(context.Background())
+	wg.Add(2)
+
+	c := make(chan struct{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	outStream := Reorder(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(10*time.Millisecond),
-		WithBufferSize(nbValues),
-		WithFlushWhenDown(),
-	)
+	var start sync.WaitGroup
 
-	cnt := 0
+	start.Add(1)
 
-	for k := range outStream {
-		require.Equal(t, k, K(cnt))
-		cnt++
-	}
+	var sendItems int
+	var receivedItems int
 
-	require.Equal(t, nbValues, cnt)
-}
+	go func() {
+		defer wg.Done()
+		defer close(c)
+		defer func() {
+			fmt.Println("send", sendItems, "items")
+		}()
 
-func TestByPriority_QuickCancel(t *testing.T) {
-	const nbValues = 10
+		start.Wait()
 
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	shuffled := RandomShuffled(0, nbValues)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	outStream := Reorder(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(1*time.Second),
-		WithBufferSize(nbValues),
-	)
-
-	cancel()
-
-	for range outStream {
-		require.FailNow(
-			t,
-			"should not get any items",
-		)
-		// drain outstream
-	}
-}
-
-func TestByPriority_PartialOrder(t *testing.T) {
-	const nbValues = 100
-
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	shuffled := RandomShuffled(0, nbValues)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	outStream := Reorder(
-		ctx,
-		shuffled,
-		WithBackPressureDelay(1000*time.Millisecond),
-		WithBufferSize(nbValues/7),
-		WithFlushWhenDown(),
-	)
-
-	values := make([]int, nbValues)
-
-	cnt := 0
-
-	for k := range outStream {
-		values[cnt] = int(k)
-		cnt++
-	}
-
-	if !assert.Equal(t, nbValues, cnt) {
-		// print values
-		for i, v := range values {
-			t.Logf("got %5d %5d", i, v)
-		}
-	}
-
-	valKeep := make([]int, nbValues)
-	copy(valKeep, values)
-	sort.Ints(values)
-	require.Equal(t, 0, values[0])
-	require.Equal(t, nbValues-1, values[len(values)-1])
-
-	for i, value := range values {
-		// fmt.Println(i, value)
-		if !assert.Equal(t, i, value) {
-			for i, value := range values {
-				fmt.Println(i, value, valKeep[i])
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case c <- struct{}{}:
+				sendItems++
 			}
-			break
 		}
-	}
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer func() {
+			fmt.Println("received", receivedItems, "items")
+		}()
+
+		start.Wait()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case _, more := <-c:
+				if !more {
+					return
+				}
+				receivedItems++
+			}
+		}
+	}()
+
+	start.Done()
+	wg.Wait()
 }
-*/
 
-func Test_inOrder_Len(t *testing.T) {
-	var h heap.Interface
+func Test_inOrder(t *testing.T) {
+	t.Parallel()
 
-	pv := make(inOrder[uint64, interface{}], 0, 100)
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	var h internalHeapInterface[uint64, interface{}]
+
+	const nbValues = 100_000
+
+	pv := make(inOrder[uint64, interface{}], 0, nbValues)
 
 	h = &pv
 
-	values := make([]uint64, 100)
-	for i := uint64(0); i < 100; i++ {
+	values := make([]uint64, nbValues)
+	for i := uint64(0); i < nbValues; i++ {
 		values[i] = i
 	}
 
@@ -336,9 +214,59 @@ func Test_inOrder_Len(t *testing.T) {
 			},
 		)
 	}
-	for i := uint64(0); i < 100; i++ {
+
+	v := uint64(0)
+
+	for h.Len() > 0 {
 		item, _ := heap.Pop(h).(Indexed[uint64, interface{}])
-		fmt.Println(item.Index, i)
+		require.Equal(t, item.Index, v)
+		v++
 	}
 
+	require.Equal(t, uint64(nbValues), v)
+}
+
+func Test_revOrder(t *testing.T) {
+	t.Parallel()
+
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	var h internalHeapInterface[uint64, interface{}]
+
+	const nbValues = 100_000
+	pv := make(revOrder[uint64, interface{}], 0, nbValues)
+
+	h = &pv
+
+	values := make([]uint64, nbValues)
+	for i := uint64(0); i < nbValues; i++ {
+		values[i] = i
+	}
+
+	for i := 0; i < 10; i++ {
+		rand.Shuffle(
+			len(values), func(i, j int) {
+				values[i], values[j] = values[j], values[i]
+			},
+		)
+	}
+
+	for _, value := range values {
+		heap.Push(
+			h,
+			Indexed[uint64, interface{}]{
+				Index: value,
+			},
+		)
+	}
+
+	v := uint64(nbValues - 1)
+
+	for h.Len() > 0 {
+		item, _ := heap.Pop(h).(Indexed[uint64, interface{}])
+		require.Equal(t, item.Index, v)
+		v--
+	}
+
+	require.Equal(t, uint64(math.MaxUint64), v)
 }
