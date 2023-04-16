@@ -79,14 +79,14 @@ func TestBreaker(t *testing.T) {
 	breaker := Breaker(
 		ctx,
 		reqStream,
-		5,
+		10,
 		3,
-		5*time.Second,
+		2*time.Second,
 	)
 	sync := SpawnRequestProcessorsPool(
 		ctx, breaker,
 		func(ctx context.Context, p2 int) (int, error) {
-			if rand.Float64() < 0.2 {
+			if rand.Float64() < 0.4 {
 				return 0, ErrBadass
 			}
 			return p2, nil

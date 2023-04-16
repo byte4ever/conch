@@ -18,7 +18,7 @@ const (
 )
 
 // ErrRequestCancelled represent an error where ....
-var ErrRequestCancelled = errors.New("request cancelled")
+var ErrRequestCancelled = errors.New("request canceled")
 
 type engineEvent uint8
 
@@ -65,15 +65,6 @@ func circuitStateEngine(
 			case <-ctx.Done():
 				return
 			case event := <-comChan:
-				// if ts.After(time.Now()) {
-				// 	fmt.Println(
-				// 		state, event, successCounter,
-				// 		failureCounter, ts.Sub(time.Now()),
-				// 	)
-				// } else {
-				// 	fmt.Println(state, event, successCounter, failureCounter)
-				// }
-
 				switch state {
 				case CircuitOpen:
 					if time.Now().After(ts) {
@@ -95,9 +86,11 @@ func circuitStateEngine(
 					switch event {
 					case engineEventSuccess:
 						successCounter++
+
 						failureCounter = 0
 					case engineEventFailure:
 						failureCounter++
+
 						successCounter = 0
 					}
 
@@ -118,10 +111,12 @@ func circuitStateEngine(
 					switch event {
 					case engineEventSuccess:
 						successCounter++
+
 						failureCounter = 0
 
 					case engineEventFailure:
 						failureCounter++
+
 						successCounter = 0
 					}
 
@@ -132,6 +127,7 @@ func circuitStateEngine(
 						ts = time.Now().Add(halfOpenTimeout)
 
 						sharedState.Store(uint32(state))
+
 						continue
 					}
 
@@ -142,6 +138,7 @@ func circuitStateEngine(
 						state = CircuitClosed
 
 						sharedState.Store(uint32(state))
+
 						continue
 					}
 				}
