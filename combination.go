@@ -2,7 +2,6 @@ package conch
 
 import (
 	"context"
-	"fmt"
 )
 
 func Combinations[T any](
@@ -98,62 +97,73 @@ func CombinationsIndexes(
 
 func CombinationsIndexesWithReplacement(
 	ctx context.Context,
-	n, r int,
-) <-chan []int {
+	n, r uint8,
+) <-chan []uint8 {
 	if r > n {
 		panic("r > n")
 	}
 
-	outStream := make(chan []int)
+	outStream := make(chan []uint8)
 
 	go func() {
 		defer close(outStream)
 
-		indexes := make([]int, r)
-
-		for i := range indexes {
-			indexes[i] = i
-		}
-
-		temp := make([]int, r)
-
-		copy(temp, indexes)
-
-		select {
-		case <-ctx.Done():
-			return
-		case outStream <- temp:
-		}
+		indexes := make([]uint8, r+1)
 
 		for {
-			for i := r - 1; i >= 0; i-- {
-				if indexes[i] < i+n-r {
-					indexes[i]++
-
-					fmt.Println(">", indexes)
-					for j := 1; j < r-i; j++ {
-						indexes[i+j] = indexes[i] + j
+			for i := r; i > 0; i-- {
+				if indexes[i] > n-1 {
+					indexes[i-1]++
+					for j := i; j <= r; j++ {
+						indexes[j] = indexes[j-1]
 					}
-					fmt.Println("<", indexes)
-
-					temp := make([]int, r)
-
-					copy(temp, indexes) // avoid overwriting of indexes
-
-					select {
-					case <-ctx.Done():
-						return
-					case outStream <- temp:
-					}
-
-					break
 				}
 			}
 
-			if indexes[0] >= n-r {
-				return
+			if indexes[0] > 0 {
+				break
 			}
 
+			temp := make([]uint8, r)
+			copy(temp, indexes[1:])
+			select {
+			case <-ctx.Done():
+				return
+			case outStream <- temp:
+			}
+
+			indexes[r]++
+		}
+	}()
+
+	return outStream
+}
+
+func CombinationsWithReplacement[T any](
+	ctx context.Context,
+	elements []T, r uint8,
+) <-chan []T {
+	outStream := make(chan []T)
+
+	go func() {
+		defer close(outStream)
+
+		ori := copyList(elements)
+
+		for indexes := range CombinationsIndexesWithReplacement(
+			ctx, uint8(len(ori)), r,
+		) {
+			t := make([]T, r)
+
+			for idx, index := range indexes {
+				t[idx] = ori[index]
+			}
+
+			select {
+			case outStream <- t:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 

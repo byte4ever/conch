@@ -3,6 +3,7 @@ package conch
 import (
 	"context"
 	"fmt"
+	"math/big"
 	"testing"
 )
 
@@ -21,6 +22,12 @@ func TestPermutationsOf(t *testing.T) {
 	}
 
 	fmt.Println(cnt)
+}
+
+func perm(n, k *big.Int) *big.Int {
+	r := fact(n)
+	r.Div(r, fact(n.Sub(n, k)))
+	return r
 }
 
 func TestPermutationsIndexes(t *testing.T) {

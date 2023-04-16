@@ -48,4 +48,9 @@ type (
 		Index   V
 		Payload Payload
 	}
+
+	IndexedInteger[V Integer, Payload any] struct {
+		Index   V
+		Payload Payload
+	}
 )

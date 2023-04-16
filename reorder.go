@@ -201,7 +201,6 @@ func Reorder[Value Ordered, Payload any](
 		}()
 
 		for {
-			// fmt.Println(pq)
 			switch {
 			case pq.Len() == opt.bufferSize:
 				v, _ := heap.Pop(pq).(Indexed[Value, Payload])
