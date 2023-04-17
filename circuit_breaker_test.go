@@ -11,63 +11,11 @@ import (
 	"go.uber.org/goleak"
 )
 
-/*func Test_circuitStateEngine(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	success, failure, state := circuitStateEngine(
-		ctx,
-		5,
-		3,
-		5*time.Second,
-	)
-
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	failure(ctx)
-	fmt.Println("              - ", <-state)
-	time.Sleep(5 * time.Second)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-	success(ctx)
-	fmt.Println("              - ", <-state)
-
-}
-*/
 // ErrBadass represent an error where ....
 var ErrBadass = errors.New("badass")
+
+// ErrUnavailable represent an error where....
+var ErrUnavailable = errors.New("unavailable")
 
 func TestBreaker(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
@@ -82,11 +30,12 @@ func TestBreaker(t *testing.T) {
 		10,
 		3,
 		2*time.Second,
+		ErrUnavailable,
 	)
 	sync := SpawnRequestProcessorsPool(
 		ctx, breaker,
 		func(ctx context.Context, p2 int) (int, error) {
-			if rand.Float64() < 0.4 {
+			if rand.Float64() < 0.5 {
 				return 0, ErrBadass
 			}
 			return p2, nil
@@ -97,6 +46,7 @@ func TestBreaker(t *testing.T) {
 
 	go func() {
 		var i int
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -106,8 +56,12 @@ func TestBreaker(t *testing.T) {
 				k, err := requester(ctx, i)
 				if err == nil {
 					fmt.Println(k)
+				} else {
+					fmt.Println(err)
 				}
+
 				time.Sleep(1 * time.Millisecond)
+
 				i++
 			}
 		}

@@ -2,7 +2,6 @@ package conch
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -16,9 +15,6 @@ const (
 	CircuitClosed                        // CLOSED
 	CircuitHalfOpen                      // HALF_OPEN
 )
-
-// ErrRequestCancelled represent an error where ....
-var ErrRequestCancelled = errors.New("request canceled")
 
 type engineEvent uint8
 
@@ -191,6 +187,7 @@ func Breaker[P any, R any](
 	nbFailureToOpen int,
 	nbSuccessToClose int,
 	halfOpenTimeout time.Duration,
+	breakerError error,
 ) <-chan Request[P, R] {
 	outStream := make(chan Request[P, R])
 
@@ -221,7 +218,7 @@ func Breaker[P any, R any](
 					// Drop new requests
 					select {
 					case req.ChResp <- ValErrorPair[R]{
-						Err: ErrRequestCancelled,
+						Err: breakerError,
 					}:
 						refresh(ctx)
 					case <-ctx.Done():

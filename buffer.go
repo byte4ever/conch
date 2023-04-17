@@ -4,6 +4,11 @@ import (
 	"context"
 )
 
+// Buffer chains a buffered channel to inStream.
+// This may help inStreams writer to be less frequently in a blocking state.
+//
+// Keep in mind that as soon as buffer is full it behave exactly as if it
+// wasn't buffered at all.
 func Buffer[T any](
 	ctx context.Context,
 	inStream <-chan T,
