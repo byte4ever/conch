@@ -72,11 +72,21 @@ func GetProcessorFor[From, To any](
 		go func() {
 			defer close(outStream)
 
-			for v := range in {
+			for {
 				select {
 				case <-ctx.Done():
 					return
-				case outStream <- f(ctx, v):
+
+				case v, more := <-in:
+					if !more {
+						return
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case outStream <- f(ctx, v):
+					}
 				}
 			}
 		}()
