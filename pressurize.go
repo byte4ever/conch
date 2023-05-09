@@ -2,9 +2,12 @@ package conch
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
+// Pressurize creates some initial pressure by creating a delay before
+// to open the stream and copy it to output
 func Pressurize[T any](
 	ctx context.Context,
 	inStream <-chan T,
@@ -49,4 +52,14 @@ func Pressurize[T any](
 	}()
 
 	return outStream
+}
+
+func PressurizeC[T any](
+	delay time.Duration,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		s := Pressurize(ctx, inStream, delay)
+		chain(ctx, wg, s)
+	}
 }

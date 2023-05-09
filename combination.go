@@ -4,10 +4,16 @@ import (
 	"context"
 )
 
+// Combinations produces all combinations of elements from the given slice.
 func Combinations[T any](
 	ctx context.Context,
-	elements []T, r int,
+	elements []T,
+	r int,
 ) <-chan []T {
+	if r > len(elements) {
+		panic("Combinations: r > len(elements)")
+	}
+
 	outStream := make(chan []T)
 
 	go func() {
@@ -33,12 +39,13 @@ func Combinations[T any](
 	return outStream
 }
 
+// CombinationsIndexes produces all combinations of indexes.
 func CombinationsIndexes(
 	ctx context.Context,
 	n, r int,
 ) <-chan []int {
 	if r > n {
-		panic("r > n")
+		panic("CombinationsIndexes: r > n")
 	}
 
 	outStream := make(chan []int)
@@ -95,6 +102,8 @@ func CombinationsIndexes(
 	return outStream
 }
 
+// CombinationsIndexesWithReplacement produces all combinations of indexes with
+// replacement.
 func CombinationsIndexesWithReplacement(
 	ctx context.Context,
 	n, r uint8,
@@ -139,6 +148,8 @@ func CombinationsIndexesWithReplacement(
 	return outStream
 }
 
+// CombinationsWithReplacement produces all combinations of elements with
+// replacement.
 func CombinationsWithReplacement[T any](
 	ctx context.Context,
 	elements []T, r uint8,

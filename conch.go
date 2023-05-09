@@ -17,21 +17,32 @@ type Comparable interface {
 
 type Generator[T any] func(context.Context) (output <-chan T, err error)
 
-func DrainDo[T any](
-	ctx context.Context,
-	inStream <-chan T,
-	do func(context.Context, T) error,
-) error {
-	for v := range inStream {
-		if do != nil {
-			err := do(ctx, v)
-			if err != nil {
-				continue
-			}
-		}
-	}
+func Consumer[T any](
+	f func(context.Context, T),
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		wg.Add(1)
 
-	return nil
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case v, more := <-inStream:
+					if !more {
+						return
+					}
+					f(ctx, v)
+				}
+			}
+		}()
+	}
 }
 
 // ContextBreaker creates an output stream that copy input stream and
@@ -62,7 +73,6 @@ func ContextBreaker[T any](
 }
 
 // GetProcessorFor return an async processor form the given function f.
-
 func GetProcessorFor[From, To any](
 	f func(context.Context, From) To,
 ) Processor[From, To] {
@@ -124,6 +134,19 @@ func ProcessorPool[From, To any](
 	}
 
 	return FanIn(ctx, streamsToMerge...)
+}
+
+func ProcessorPoolC[From, To any](
+	concurrency int,
+	processorFunc Processor[From, To],
+	chain ChainFunc[To],
+) ChainFunc[From] {
+	return func(
+		ctx context.Context, wg *sync.WaitGroup, inStream <-chan From,
+	) {
+		s := ProcessorPool(ctx, concurrency, processorFunc, inStream)
+		chain(ctx, wg, s)
+	}
 }
 
 // FanIn multiplexes input streams into a single output stream with balanced
@@ -367,6 +390,20 @@ func MirrorHighThroughput[T any](
 	return outStreams
 }
 
+func MirrorHighThroughputC[T any](
+	chain ...ChainFunc[T],
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		for idx, stream := range MirrorHighThroughput(
+			ctx,
+			inStream,
+			len(chain),
+		) {
+			chain[idx](ctx, wg, stream)
+		}
+	}
+}
+
 // MirrorLowLatency replicate input stream to multiple output streams with
 // minimum latency.
 //
@@ -395,6 +432,20 @@ func MirrorLowLatency[T any](
 	recBuildTeeTree(inStreamBrk, outStreams)
 
 	return outStreams
+}
+
+func MirrorLowLatencyC[T any](
+	chain ...ChainFunc[T],
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		for idx, stream := range MirrorLowLatency(
+			ctx,
+			inStream,
+			len(chain),
+		) {
+			chain[idx](ctx, wg, stream)
+		}
+	}
 }
 
 // FairFanIn merges multiple input streams into a single output stream with
@@ -537,4 +588,14 @@ func RateLimit[T any](
 	}()
 
 	return outStream
+}
+
+func RateLimitC[T any](
+	ratePerSecond int,
+	chain ChainFunc[T],
+	option ...ratelimit.Option,
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		chain(ctx, wg, RateLimit(ctx, inStream, ratePerSecond, option...))
+	}
 }

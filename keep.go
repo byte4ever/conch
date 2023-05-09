@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 // Keep generates a stream by keeping the first count items from the
@@ -48,4 +49,14 @@ func Keep[T any](
 	}()
 
 	return outStream
+}
+
+func KeepC[T any](
+	count int,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		s := Keep(ctx, inStream, count)
+		chain(ctx, wg, s)
+	}
 }

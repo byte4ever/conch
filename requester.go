@@ -70,9 +70,79 @@ func Requester[P, R any](ctx context.Context) (
 	}, outStream
 }
 
+func RequesterC[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	chain ChainFunc[Request[P, R]],
+) func(context.Context, P) (R, error) {
+	requester, s := Requester[P, R](ctx)
+	chain(ctx, wg, s)
+
+	return requester
+}
+
+func RequestProcessor[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	inStream <-chan Request[P, R],
+	processing func(context.Context, P) (R, error),
+	id string,
+) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for req := range inStream {
+			result, err := processing(ctx, req.P)
+			select {
+			case req.ChResp <- ValErrorPair[R]{V: result, Err: err}:
+				close(req.ChResp)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func RequestProcessorPool[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	inStream <-chan Request[P, R],
+	processing func(context.Context, P) (R, error),
+	count int,
+	id string,
+) {
+
+	for i := 0; i < count; i++ {
+		RequestProcessor(
+			ctx,
+			wg,
+			inStream,
+			processing,
+			fmt.Sprintf("%s-%d", id, i),
+		)
+	}
+}
+
+func RequestProcessorPoolC[P any, R any](
+	processing func(context.Context, P) (R, error),
+	count int,
+	id string,
+) ChainFunc[Request[P, R]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan Request[P, R],
+	) {
+		RequestProcessorPool(ctx, wg, inStream, processing, count, id)
+	}
+}
+
 func SpawnRequestProcessor[P any, R any](
-	ctx context.Context, inStream <-chan Request[P, R],
-	processing func(context.Context, P) (R, error), id string,
+	ctx context.Context,
+	inStream <-chan Request[P, R],
+	processing func(context.Context, P) (R, error),
+	id string,
 ) func() {
 	var wg sync.WaitGroup
 
@@ -82,7 +152,6 @@ func SpawnRequestProcessor[P any, R any](
 		defer wg.Done()
 
 		for req := range inStream {
-			// fmt.Println("processing    --- ", id, req.P)
 			result, err := processing(ctx, req.P)
 			select {
 			case req.ChResp <- ValErrorPair[R]{V: result, Err: err}:

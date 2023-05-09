@@ -3,6 +3,7 @@ package conch
 import (
 	"context"
 	"fmt"
+	"sync"
 )
 
 type IndexGetter[O any] func(O) int
@@ -54,6 +55,26 @@ func Sieve[T any](
 	}
 
 	return outStreamsDir
+}
+
+func SieveC[T any](
+	choice IndexGetter[T],
+	chain ...ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		for idx, stream := range Sieve(
+			ctx,
+			choice,
+			len(chain),
+			inStream,
+		) {
+			chain[idx](ctx, wg, stream)
+		}
+	}
 }
 
 type sieveItem[T any] struct {
@@ -263,4 +284,24 @@ func SieveTree[T any](
 	}
 
 	return outStreamsCvt
+}
+
+func SieveTreeC[T any](
+	choice IndexGetter[T],
+	chain ...ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		for idx, stream := range SieveTree(
+			ctx,
+			choice,
+			len(chain),
+			inStream,
+		) {
+			chain[idx](ctx, wg, stream)
+		}
+	}
 }

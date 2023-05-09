@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/dustin/go-humanize"
@@ -19,24 +20,29 @@ func TestPathGenerator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	poolOutStream := conch.ProcessorPool(
-		ctx,
-		16,
+	var wg sync.WaitGroup
+
+	conch.ProcessorPoolC(
+		64,
 		conch.GetProcessorFor(ProcessRequest),
-		PathGenerator(
+		conch.Consumer(
+			func(ctx context.Context, resp *FileHashResponse) {
+				fmt.Println(
+					resp.Path,
+					humanize.Bytes(uint64(resp.Size)),
+					// resp.Duration,
+					// hex.EncodeToString(resp.Hash),
+					// float64(resp.Size)/(resp.Duration.Seconds()*1024*1024),
+				)
+			},
+		),
+	)(
+		ctx, &wg, PathGenerator(
 			ctx,
 			"/home/lmartin/Downloads",
 			crypto.SHA256,
 		),
 	)
 
-	for resp := range poolOutStream {
-		fmt.Println(
-			resp.Path,
-			humanize.Bytes(uint64(resp.Size)),
-			// resp.Duration,
-			// hex.EncodeToString(resp.Hash),
-			// float64(resp.Size)/(resp.Duration.Seconds()*1024*1024),
-		)
-	}
+	wg.Wait()
 }

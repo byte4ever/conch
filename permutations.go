@@ -10,6 +10,7 @@ func copyList[T any](elements []T) []T {
 	return result
 }
 
+// PermutationsOf provides all permutations of a list of elements.
 func PermutationsOf[T any](
 	ctx context.Context,
 	elements []T,
@@ -40,6 +41,7 @@ func PermutationsOf[T any](
 	return outStream
 }
 
+// PermutationsIndexes provides all permutations indexes.
 func PermutationsIndexes(
 	ctx context.Context,
 	n int,

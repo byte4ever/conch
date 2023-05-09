@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 // Skip generates a stream by skipping the first count items from the
@@ -49,4 +50,14 @@ func Skip[T any](
 	}()
 
 	return outStream
+}
+
+func SkipC[T any](
+	count int,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+		s := Skip(ctx, inStream, count)
+		chain(ctx, wg, s)
+	}
 }

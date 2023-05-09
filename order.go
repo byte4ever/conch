@@ -2,15 +2,16 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
-func SetIndex[T any](
+func SetIndex[T any, C Integer](
 	ctx context.Context,
 	inStream <-chan T,
-) <-chan Indexed[uint64, T] {
-	var idx uint64
+) <-chan Indexed[C, T] {
+	var idx C
 
-	outStream := make(chan Indexed[uint64, T])
+	outStream := make(chan Indexed[C, T])
 
 	go func() {
 		defer close(outStream)
@@ -24,7 +25,7 @@ func SetIndex[T any](
 				return
 			}
 			select {
-			case outStream <- Indexed[uint64, T]{
+			case outStream <- Indexed[C, T]{
 				Index:   idx,
 				Payload: payload,
 			}:
@@ -39,9 +40,21 @@ func SetIndex[T any](
 	return outStream
 }
 
-func UnsetIndex[Idx Ordered, T any](
+func SetIndexC[T any, C Integer](
+	chain ChainFunc[Indexed[C, T]],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, SetIndex[T, C](ctx, inStream))
+	}
+}
+
+func UnsetIndex[T any, C Integer](
 	ctx context.Context,
-	inStream <-chan Indexed[Idx, T],
+	inStream <-chan Indexed[C, T],
 ) <-chan T {
 	outStream := make(chan T)
 
@@ -66,4 +79,16 @@ func UnsetIndex[Idx Ordered, T any](
 	}()
 
 	return outStream
+}
+
+func UnsetIndexC[T any, C Integer](
+	chain ChainFunc[T],
+) ChainFunc[Indexed[C, T]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan Indexed[C, T],
+	) {
+		chain(ctx, wg, UnsetIndex[T, C](ctx, inStream))
+	}
 }

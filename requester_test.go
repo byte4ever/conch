@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 )
 
@@ -45,26 +46,12 @@ func TestRequester(t *testing.T) {
 	)
 
 	for i := 0; i < prioSpread; i++ {
-		// var s <-chan Request[int, int]
-		// prioRequesters[i], s = Requester[int, int](ctx)
-		// streams[i] = Buffer(ctx, s, 100000)
 		prioRequesters[i], streams[i] = Requester[int, int](ctx)
 	}
 
 	unfairStream := UnfairFanIn(ctx, streams...)
 
 	watchStream := unfairStream
-	// watchStream := Transform(
-	// ctx,
-	// unfairStream,
-	// func(
-	// 	ctx context.Context,
-	// 	v Request[int, int],
-	// ) Request[int, int] {
-	// 	fmt.Println(v.P)
-	// 	return v
-	// },
-	// )
 
 	SpawnRequestProcessorsPool(ctx, watchStream, f, 4, "proc")
 
@@ -114,4 +101,28 @@ func TestRequester(t *testing.T) {
 	start.Done()
 	wg.Wait()
 	fmt.Println(totCnt.Load())
+}
+
+func TestRequestProcessor(t *testing.T) {
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	requester := RequesterC(
+		ctx,
+		&wg,
+		RequestProcessorPoolC(
+			func(ctx context.Context, v int) (int, error) {
+				return v, nil
+			}, 32, "",
+		),
+	)
+
+	for i := 0; i < 100_000; i++ {
+		r, err := requester(ctx, i)
+		require.NoError(t, err)
+		require.Equal(t, i, r)
+	}
+
+	cancel()
+	wg.Wait()
 }

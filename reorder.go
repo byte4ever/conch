@@ -3,6 +3,7 @@ package conch
 import (
 	"container/heap"
 	"context"
+	"sync"
 )
 
 type (
@@ -245,4 +246,16 @@ func Reorder[Value Ordered, Payload any](
 	}()
 
 	return outStream
+}
+
+func ReorderC[Value Ordered, Payload any](
+	chain ChainFunc[Indexed[Value, Payload]],
+	options ...ReorderOption,
+) ChainFunc[Indexed[Value, Payload]] {
+	return func(
+		ctx context.Context, wg *sync.WaitGroup,
+		inStream <-chan Indexed[Value, Payload],
+	) {
+		chain(ctx, wg, Reorder(ctx, inStream, options...))
+	}
 }
