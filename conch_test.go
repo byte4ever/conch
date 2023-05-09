@@ -377,7 +377,7 @@ func TestRateLimit(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(
 		context.Background(),
-		60*time.Second,
+		20*time.Second,
 	)
 	defer cancel()
 

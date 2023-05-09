@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/dustin/go-humanize"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
 
 	"github.com/byte4ever/conch"
@@ -20,31 +19,16 @@ func TestPathGenerator(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	outStream := PathGenerator(
+	poolOutStream := conch.ProcessorPool(
 		ctx,
-		"/home/lmartin/Downloads",
-		crypto.SHA256,
+		16,
+		conch.GetProcessorFor(ProcessRequest),
+		PathGenerator(
+			ctx,
+			"/home/lmartin/Downloads",
+			crypto.SHA256,
+		),
 	)
-
-	fhpb := &FileHashProcessorBuilder{
-		InStream: outStream,
-	}
-
-	processor := fhpb.BuildProcessor()
-
-	poolOutStream, err := conch.WorkerPool(
-		ctx,
-
-		processor,
-		processor,
-		processor,
-		processor,
-		processor,
-		processor,
-		processor,
-		processor,
-	)
-	require.NoError(t, err)
 
 	for resp := range poolOutStream {
 		fmt.Println(

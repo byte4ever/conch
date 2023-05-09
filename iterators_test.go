@@ -22,5 +22,4 @@ func TestGen_Next(t *testing.T) {
 		accum += next
 		fmt.Println(accum, next)
 	}
-
 }

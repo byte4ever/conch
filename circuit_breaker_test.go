@@ -20,7 +20,7 @@ var ErrUnavailable = errors.New("unavailable")
 func TestBreaker(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	requester, reqStream := Requester[int, int](ctx)

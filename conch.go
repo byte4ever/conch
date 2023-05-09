@@ -61,27 +61,59 @@ func ContextBreaker[T any](
 	return outStream
 }
 
-// WorkerPool launch the given generators concurrently and multiplexes the
+// GetProcessorFor return an async processor form the given function f.
+
+func GetProcessorFor[From, To any](
+	f func(context.Context, From) To,
+) Processor[From, To] {
+	return func(ctx context.Context, in <-chan From) <-chan To {
+		outStream := make(chan To)
+
+		go func() {
+			defer close(outStream)
+
+			for v := range in {
+				select {
+				case <-ctx.Done():
+					return
+				case outStream <- f(ctx, v):
+				}
+			}
+		}()
+
+		return outStream
+	}
+}
+
+// Processor defines a function that read from a single input stream and
+// produce elements to the resulting output stream.
+type Processor[From, To any] func(
+	ctx context.Context, input <-chan From,
+) <-chan To
+
+// ProcessorPool launch the given processor concurrently and multiplexes the
 // outputs in a single output stream.
-func WorkerPool[T any](
+func ProcessorPool[From, To any](
 	ctx context.Context,
-	egs ...Generator[T],
-) (outputStream <-chan T, err error) {
-	le := len(egs)
-	if le == 0 {
-		return nil, nil //nolint:nilnil //dgas
+	concurrency int,
+	processorFunc Processor[From, To],
+	inStream <-chan From,
+) (outputStream <-chan To) {
+	if concurrency < 1 {
+		panic("ProcessorPool: concurrency must be positive")
 	}
 
-	inStreams := make([]<-chan T, le)
-
-	for i, eg := range egs {
-		inStreams[i], err = eg(ctx)
-		if err != nil {
-			return nil, err
-		}
+	if concurrency == 1 {
+		return processorFunc(ctx, inStream)
 	}
 
-	return FanIn(ctx, inStreams...), nil
+	streamsToMerge := make([]<-chan To, concurrency)
+
+	for i := 0; i < concurrency; i++ {
+		streamsToMerge[i] = processorFunc(ctx, inStream)
+	}
+
+	return FanIn(ctx, streamsToMerge...)
 }
 
 // FanIn multiplexes input streams into a single output stream with balanced

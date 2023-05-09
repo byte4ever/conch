@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"time"
-
-	"github.com/byte4ever/conch"
 )
 
 type FileHashRequest struct {
@@ -24,83 +22,81 @@ type FileHashResponse struct {
 	Err      error
 }
 
-type FileHashProcessorBuilder struct {
-	InStream chan *FileHashRequest
-}
+func HashFilesProcessor(
+	ctx context.Context,
+	inStream <-chan *FileHashRequest,
+) <-chan *FileHashResponse {
+	outStream := make(chan *FileHashResponse)
 
-func (b *FileHashProcessorBuilder) BuildProcessor() conch.Generator[*FileHashResponse] {
-	return func(ctx context.Context) (
-		<-chan *FileHashResponse, error,
-	) {
-		outStream := make(chan *FileHashResponse)
+	go func() {
+		defer close(outStream)
 
-		go func() {
-			defer close(outStream)
-
-			for {
-				select {
-				case <-ctx.Done():
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case request, more := <-inStream:
+				if !more {
 					return
-				case request, more := <-b.InStream:
-					if !more {
-						return
-					}
+				}
 
-					start := time.Now()
-					hasher := request.Hasher.New()
+				start := time.Now()
+				hasher := request.Hasher.New()
 
-					f, err := os.Open(request.Path)
-					if err != nil {
-						select {
-						case outStream <- &FileHashResponse{
-							FileHashRequest: *request,
-							Err:             err,
-						}:
-						case <-ctx.Done():
-							return
-						}
-
-						continue
-					}
-
-					size, err := io.Copy(hasher, f)
-					if err != nil {
-						outStream <- &FileHashResponse{
-							FileHashRequest: *request,
-							Err:             err,
-						}
-
-						_ = f.Close()
-
-						continue
-					}
-
-					_ = f.Close()
-
+				f, err := os.Open(request.Path)
+				if err != nil {
 					select {
 					case outStream <- &FileHashResponse{
 						FileHashRequest: *request,
-						Duration:        time.Since(start),
-						Size:            size,
-						Hash:            hasher.Sum(nil),
+						Err:             err,
 					}:
-
 					case <-ctx.Done():
 						return
 					}
+
+					continue
+				}
+
+				size, err := io.Copy(hasher, f)
+				if err != nil {
+					select {
+					case outStream <- &FileHashResponse{
+						FileHashRequest: *request,
+						Err:             err,
+					}:
+						_ = f.Close()
+					case <-ctx.Done():
+						_ = f.Close()
+						return
+					}
+
+					continue
+				}
+
+				_ = f.Close()
+
+				select {
+				case outStream <- &FileHashResponse{
+					FileHashRequest: *request,
+					Duration:        time.Since(start),
+					Size:            size,
+					Hash:            hasher.Sum(nil),
+				}:
+				case <-ctx.Done():
+					return
 				}
 			}
-		}()
+		}
+	}()
 
-		return outStream, nil
-	}
+	return outStream
 }
 
 func PathGenerator(
 	ctx context.Context,
 	path string,
 	hasher crypto.Hash,
-) chan *FileHashRequest {
+) <-chan *FileHashRequest {
 	outStream := make(chan *FileHashRequest)
 
 	f := func(path string, info os.FileInfo, err error) error {
@@ -127,4 +123,37 @@ func PathGenerator(
 	}()
 
 	return outStream
+}
+
+func ProcessRequest(
+	_ context.Context,
+	request *FileHashRequest,
+) *FileHashResponse {
+	start := time.Now()
+	hasher := request.Hasher.New()
+
+	f, err := os.Open(request.Path)
+	if err != nil {
+		return &FileHashResponse{
+			FileHashRequest: *request,
+			Err:             err,
+		}
+	}
+
+	size, err := io.Copy(hasher, f)
+	if err != nil {
+		return &FileHashResponse{
+			FileHashRequest: *request,
+			Err:             err,
+		}
+	}
+
+	_ = f.Close()
+
+	return &FileHashResponse{
+		FileHashRequest: *request,
+		Duration:        time.Since(start),
+		Size:            size,
+		Hash:            hasher.Sum(nil),
+	}
 }

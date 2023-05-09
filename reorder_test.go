@@ -17,7 +17,7 @@ import (
 func randomIndexed(
 	t *testing.T,
 	ctx context.Context, spread int,
-) <-chan Indexed[int, interface{}] {
+) <-chan Indexed[int, any] {
 	t.Helper()
 
 	outStream := make(chan Indexed[int, interface{}])
@@ -71,15 +71,13 @@ func randomIndexedCount(
 }
 
 func TestReorder(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
-
 	t.Parallel()
 
 	t.Run(
 		"streaming closed by context", func(t *testing.T) {
-			const testDuration = time.Second
-
 			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+			const testDuration = time.Second
 
 			ctx, cancel := context.WithTimeout(
 				context.Background(),
@@ -98,9 +96,9 @@ func TestReorder(t *testing.T) {
 
 	t.Run(
 		"streaming closed by closing input", func(t *testing.T) {
-			const testDuration = time.Second
-
 			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+			const testDuration = time.Second
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -117,7 +115,6 @@ func TestReorder(t *testing.T) {
 
 func TestMe(t *testing.T) {
 	t.Parallel()
-
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 	var wg sync.WaitGroup
@@ -182,7 +179,6 @@ func TestMe(t *testing.T) {
 
 func Test_inOrder(t *testing.T) {
 	t.Parallel()
-
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 	var h internalHeapInterface[uint64, interface{}]
@@ -228,7 +224,6 @@ func Test_inOrder(t *testing.T) {
 
 func Test_revOrder(t *testing.T) {
 	t.Parallel()
-
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 	var h internalHeapInterface[uint64, interface{}]

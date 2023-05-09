@@ -5,14 +5,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 func TestChain(t *testing.T) {
-	t.Parallel()
 
 	t.Run(
 		"success", func(t *testing.T) {
-			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 			stream1 := fakeStream("s1", 2)
 			stream2 := fakeStream("s2", 2)
@@ -34,7 +34,7 @@ func TestChain(t *testing.T) {
 
 	t.Run(
 		"detect duplicate", func(t *testing.T) {
-			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 			stream1 := fakeStream("s1", 2)
 

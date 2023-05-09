@@ -3,14 +3,14 @@ package conch
 import (
 	"context"
 	"testing"
+
+	"go.uber.org/goleak"
 )
 
 func TestKeep(t *testing.T) {
-	t.Parallel()
-
 	t.Run(
 		"some", func(t *testing.T) {
-			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 			stream1 := fakeStream("s1", 200)
 
@@ -32,7 +32,7 @@ func TestKeep(t *testing.T) {
 
 	t.Run(
 		"none", func(t *testing.T) {
-			t.Parallel()
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 			stream1 := fakeStream("s1", 200)
 

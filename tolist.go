@@ -9,15 +9,12 @@ func ToList[T any](
 	inStream <-chan T,
 	expectedSize int,
 ) <-chan []T {
-	list := make(chan []T)
+	outStream := make(chan []T)
 
 	go func() {
-		var outResult []T
+		defer close(outStream)
 
-		defer close(list)
-		defer func() {
-			list <- outResult
-		}()
+		var outResult []T
 
 		if expectedSize != 0 {
 			outResult = make([]T, 0, expectedSize)
@@ -30,7 +27,12 @@ func ToList[T any](
 
 			case v, more := <-inStream:
 				if !more {
-					return
+					select {
+					case <-ctx.Done():
+						return
+					case outStream <- outResult:
+						return
+					}
 				}
 
 				outResult = append(outResult, v)
@@ -38,5 +40,5 @@ func ToList[T any](
 		}
 	}()
 
-	return list
+	return outStream
 }
