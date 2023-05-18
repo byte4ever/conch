@@ -14,6 +14,7 @@ import (
 // Keep in mind that priority effect is only achieved under high pressure.
 func UnfairRequesters[P, R any](
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	count int,
 ) (
 	[]RequestFunc[P, R],
@@ -30,7 +31,7 @@ func UnfairRequesters[P, R any](
 	)
 
 	for i := 0; i < count; i++ {
-		prioRequesters[i], streams[i] = Requester[P, R](ctx)
+		prioRequesters[i], streams[i] = Requester[P, R](ctx, wg)
 	}
 
 	return prioRequesters, UnfairFanIn(ctx, streams...)
@@ -43,30 +44,43 @@ func UnfairRequestersC[P, R any](
 	count int,
 	chain ChainFunc[Request[P, R]],
 ) []RequestFunc[P, R] {
-	requesters, o := UnfairRequesters[P, R](ctx, count)
+	requesters, o := UnfairRequesters[P, R](ctx, wg, count)
 
 	chain(ctx, wg, o)
 
 	return requesters
 }
 
-func Requester[P, R any](ctx context.Context) (
+func Requester[P, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+) (
 	RequestFunc[P, R],
 	<-chan Request[P, R],
 ) {
-	var wg sync.WaitGroup
 	outStream := make(chan Request[P, R])
 
 	go func() {
-		defer close(outStream)
-		defer wg.Wait()
+		defer func() {
+			wg.Wait()
+			close(outStream)
+			for r := range outStream {
+				r.Return(
+					ctx,
+					ValErrorPair[R]{
+						Err: ctx.Err(),
+					},
+				)
+			}
+		}()
+
 		select {
 		case <-ctx.Done():
 			return
 		}
 	}()
 
-	return requestFun[P, R](ctx, &wg, outStream),
+	return requestFun[P, R](ctx, wg, outStream),
 		outStream
 }
 
@@ -119,6 +133,8 @@ func requestFun[P, R any](
 			return zeroR, innerCtx.Err()
 		}
 
+		wg.Done()
+
 		// receive response
 		select {
 		case rv := <-chResp:
@@ -136,7 +152,7 @@ func RequesterC[P any, R any](
 	wg *sync.WaitGroup,
 	chain ChainFunc[Request[P, R]],
 ) RequestFunc[P, R] {
-	requester, s := Requester[P, R](ctx)
+	requester, s := Requester[P, R](ctx, wg)
 	chain(ctx, wg, s)
 
 	return requester

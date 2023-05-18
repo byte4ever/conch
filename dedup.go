@@ -2,7 +2,6 @@ package conch
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
@@ -22,11 +21,7 @@ func Dedup[P Hashable, R any](
 	go func() {
 		defer close(outStream)
 
-		fmt.Println("create pool")
-
 		dedupPool := NewDedupPool[R](100)
-
-		fmt.Println("pool created")
 
 		defer dedupPool.Purge()
 

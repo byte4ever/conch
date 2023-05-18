@@ -188,7 +188,9 @@ func TestFullmonty(t *testing.T) {
 		concurrencyFactor+1,
 		conch.ConsumerC(
 			func() func(context.Context, struct{}) {
-				rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+				nano := time.Now().UnixNano()
+				fmt.Println("---------------- CONSUMER", nano)
+				rnd := rand.New(rand.NewSource(nano))
 				return func(ctx context.Context, t struct{}) {
 					// s := time.Now()
 					p := rnd.Intn(INSEECount)
@@ -204,6 +206,7 @@ func TestFullmonty(t *testing.T) {
 					// 	fmt.Println(d, r.Population)
 					// }
 					// time.Sleep(time.Second)
+					// fmt.Println(time.Now())
 				}
 			}(),
 		),
@@ -214,8 +217,15 @@ func TestFullmonty(t *testing.T) {
 		// time.Sleep(time.Second)
 	}
 
+	fmt.Println("=====================================")
 	cancel()
+
+	s := time.Now()
+
 	wg.Wait()
+
+	fmt.Println("time to die ", time.Since(s))
+
 	cache.Close()
 
 	fmt.Println(cntSend.Load())
