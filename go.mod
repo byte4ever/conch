@@ -8,8 +8,11 @@ require (
 	github.com/dgraph-io/ristretto v0.1.1
 	github.com/dustin/go-humanize v1.0.1
 	github.com/hashicorp/go-retryablehttp v0.7.2
+	github.com/kr/pretty v0.1.0
 	github.com/stretchr/testify v1.8.2
 	go.uber.org/goleak v1.2.1
+	go.uber.org/zap v1.24.0
+	logur.dev/adapter/zap v0.5.0
 )
 
 require (
@@ -22,6 +25,9 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
 	golang.org/x/sys v0.0.0-20221010170243-090e33056c14 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	logur.dev/logur v0.16.1 // indirect
 )

@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 )
 
@@ -164,18 +165,80 @@ func RequestConsumer[P any, R any](
 	inStream <-chan Request[P, R],
 	processing RequestFunc[P, R],
 ) {
-	Consumer[Request[P, R]](
-		ctx, wg, func(ctx context.Context, p Request[P, R]) {
-			res, err := processing(ctx, p.P)
-
-			p.Return(
-				ctx, ValErrorPair[R]{
-					V:   res,
-					Err: err,
-				},
-			)
-		}, inStream,
+	requestConsumer(
+		ctx,
+		wg,
+		logger,
+		inStream,
+		processing,
 	)
+}
+
+func interceptRequest[P, R any](
+	logger Logger,
+	f RequestFunc[P, R],
+) RequestFunc[P, R] {
+	return func(ctx context.Context, p P) (r R, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				stack := string(debug.Stack())
+
+				go func() {
+					logger.Error(
+						"intercept panic",
+						map[string]any{
+							"error": r,
+							"stack": stack,
+						},
+					)
+
+					var zeroR R
+					err = &PanicError{
+						err:   r,
+						stack: stack,
+					}
+					r = zeroR
+				}()
+			}
+		}()
+
+		return f(ctx, p)
+	}
+}
+
+func requestConsumer[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	l Logger,
+	inStream <-chan Request[P, R],
+	processing RequestFunc[P, R],
+) {
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case e, more := <-inStream:
+				if !more {
+					return
+				}
+
+				res, err := interceptRequest(l, processing)(ctx, e.P)
+
+				e.Return(
+					ctx, ValErrorPair[R]{
+						V:   res,
+						Err: err,
+					},
+				)
+			}
+		}
+	}()
 }
 
 func RequestConsumerC[P any, R any](

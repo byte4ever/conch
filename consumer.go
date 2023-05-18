@@ -2,12 +2,44 @@ package conch
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 )
+
+func intercept[T any](
+	logger Logger,
+	f Doer[T],
+) Doer[T] {
+	return func(ctx context.Context, t T) {
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error(
+					"intercept panic",
+					map[string]any{
+						"error": r,
+						"stack": string(debug.Stack()),
+					},
+				)
+			}
+		}()
+
+		f(ctx, t)
+	}
+}
 
 func Consumer[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
+	f Doer[T],
+	inStream <-chan T,
+) {
+	consumer(ctx, wg, logger, f, inStream)
+}
+
+func consumer[T any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	l Logger,
 	f Doer[T],
 	inStream <-chan T,
 ) {
@@ -26,7 +58,7 @@ func Consumer[T any](
 					return
 				}
 
-				f(ctx, e)
+				intercept(l, f)(ctx, e)
 			}
 		}
 	}()

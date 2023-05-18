@@ -28,7 +28,7 @@ func TestBreaker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	requester, reqStream := Requester[int, int](ctx)
+	requester, reqStream := Requester[int, int](ctx, &wg)
 	breaker := Breaker(
 		ctx,
 		reqStream,
