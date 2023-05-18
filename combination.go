@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 // Combinations produces all combinations of elements from the given slice.
@@ -39,27 +40,37 @@ func Combinations[T any](
 	return outStream
 }
 
-// CombinationsIndexes produces all combinations of indexes.
-func CombinationsIndexes(
+func CombinationsC[T any](
 	ctx context.Context,
-	n, r int,
-) <-chan []int {
+	wg *sync.WaitGroup,
+	elements []T,
+	r int,
+	chain ChainFunc[[]T],
+) {
+	chain(ctx, wg, Combinations(ctx, elements, r))
+}
+
+// CombinationsIndexes produces all combinations of indexes.
+func CombinationsIndexes[T Integer](
+	ctx context.Context,
+	n, r T,
+) <-chan []T {
 	if r > n {
 		panic("CombinationsIndexes: r > n")
 	}
 
-	outStream := make(chan []int)
+	outStream := make(chan []T)
 
 	go func() {
 		defer close(outStream)
 
-		indexes := make([]int, r)
+		indexes := make([]T, r)
 
 		for i := range indexes {
-			indexes[i] = i
+			indexes[i] = T(i)
 		}
 
-		temp := make([]int, r)
+		temp := make([]T, r)
 
 		copy(temp, indexes)
 
@@ -74,11 +85,11 @@ func CombinationsIndexes(
 				if indexes[i] < i+n-r {
 					indexes[i]++
 
-					for j := 1; j < r-i; j++ {
+					for j := T(1); j < r-i; j++ {
 						indexes[i+j] = indexes[i] + j
 					}
 
-					temp := make([]int, r)
+					temp := make([]T, r)
 
 					copy(temp, indexes) // avoid overwriting of indexes
 
@@ -95,29 +106,38 @@ func CombinationsIndexes(
 			if indexes[0] >= n-r {
 				return
 			}
-
 		}
 	}()
 
 	return outStream
 }
 
+func CombinationsIndexesC[T Integer](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	n T,
+	r T,
+	chain ChainFunc[[]T],
+) {
+	chain(ctx, wg, CombinationsIndexes(ctx, n, r))
+}
+
 // CombinationsIndexesWithReplacement produces all combinations of indexes with
 // replacement.
-func CombinationsIndexesWithReplacement(
+func CombinationsIndexesWithReplacement[T Unsigned](
 	ctx context.Context,
-	n, r uint8,
-) <-chan []uint8 {
+	n, r T,
+) <-chan []T {
 	if r > n {
 		panic("r > n")
 	}
 
-	outStream := make(chan []uint8)
+	outStream := make(chan []T)
 
 	go func() {
 		defer close(outStream)
 
-		indexes := make([]uint8, r+1)
+		indexes := make([]T, r+1)
 
 		for {
 			for i := r; i > 0; i-- {
@@ -133,7 +153,7 @@ func CombinationsIndexesWithReplacement(
 				break
 			}
 
-			temp := make([]uint8, r)
+			temp := make([]T, r)
 			copy(temp, indexes[1:])
 			select {
 			case <-ctx.Done():
@@ -148,11 +168,21 @@ func CombinationsIndexesWithReplacement(
 	return outStream
 }
 
+func CombinationsIndexesWithReplacementC[T Unsigned](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	n T,
+	r T,
+	chain ChainFunc[[]T],
+) {
+	chain(ctx, wg, CombinationsIndexesWithReplacement(ctx, n, r))
+}
+
 // CombinationsWithReplacement produces all combinations of elements with
 // replacement.
 func CombinationsWithReplacement[T any](
 	ctx context.Context,
-	elements []T, r uint8,
+	elements []T, r int,
 ) <-chan []T {
 	outStream := make(chan []T)
 
@@ -162,7 +192,7 @@ func CombinationsWithReplacement[T any](
 		ori := copyList(elements)
 
 		for indexes := range CombinationsIndexesWithReplacement(
-			ctx, uint8(len(ori)), r,
+			ctx, uint(len(ori)), uint(r),
 		) {
 			t := make([]T, r)
 

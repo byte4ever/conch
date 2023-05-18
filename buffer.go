@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 // Buffer chains a buffered channel to inStream.
@@ -19,14 +20,33 @@ func Buffer[T any](
 	go func() {
 		defer close(outStream)
 
-		for v := range inStream {
+		for {
 			select {
 			case <-ctx.Done():
 				return
-			case outStream <- v:
+			case item, more := <-inStream:
+				if !more {
+					return
+				}
+
+				select {
+				case <-ctx.Done():
+					return
+				case outStream <- item:
+				}
 			}
 		}
 	}()
 
 	return outStream
+}
+
+func BufferC[T any](size int, chain ChainFunc[T]) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, Buffer(ctx, inStream, size))
+	}
 }

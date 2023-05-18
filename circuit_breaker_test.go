@@ -5,20 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"go.uber.org/goleak"
 )
 
-// ErrBadass represent an error where ....
-var ErrBadass = errors.New("badass")
+var (
+	// ErrBadass represent an error where ....
+	ErrBadass = errors.New("badass")
 
-// ErrUnavailable represent an error where....
-var ErrUnavailable = errors.New("unavailable")
+	// ErrUnavailable represent an error where....
+	ErrUnavailable = errors.New("unavailable")
+)
 
 func TestBreaker(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	var wg sync.WaitGroup
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -27,21 +32,23 @@ func TestBreaker(t *testing.T) {
 	breaker := Breaker(
 		ctx,
 		reqStream,
-		10,
+		4,
 		3,
 		2*time.Second,
 		ErrUnavailable,
 	)
-	sync := SpawnRequestProcessorsPool(
-		ctx, breaker,
+
+	RequestConsumerPool(
+		ctx,
+		&wg,
+		breaker,
 		func(ctx context.Context, p2 int) (int, error) {
-			if rand.Float64() < 0.5 {
+			if rand.Float64() < 0.3 {
 				return 0, ErrBadass
 			}
 			return p2, nil
 		},
 		10,
-		"",
 	)
 
 	go func() {
@@ -67,5 +74,5 @@ func TestBreaker(t *testing.T) {
 		}
 	}()
 
-	sync()
+	wg.Wait()
 }

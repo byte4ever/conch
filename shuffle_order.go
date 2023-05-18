@@ -3,6 +3,7 @@ package conch
 import (
 	"context"
 	"math/rand"
+	"sync"
 )
 
 func ShuffleOrder[T any](
@@ -78,4 +79,18 @@ func ShuffleOrder[T any](
 	}()
 
 	return outStream
+}
+
+func ShuffleOrderC[T any](
+	maxBufferSize int,
+	rnd *rand.Rand,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, ShuffleOrder(ctx, maxBufferSize, rnd, inStream))
+	}
 }

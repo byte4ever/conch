@@ -273,7 +273,6 @@ func IntSequenceGenerator(
 	minValue,
 	maxValue int,
 ) Generator[int] {
-
 	return func(ctx context.Context) (<-chan int, error) {
 		output := make(chan int)
 
@@ -411,11 +410,13 @@ func TestRateLimit(t *testing.T) {
 					fmt.Println("openMe ---------------------------")
 					os.Stdout.Sync()
 					openValve()
+
 					isClosed = false
 				} else {
 					closeValve()
 					fmt.Println("closed ---------------------------")
 					os.Stdout.Sync()
+
 					isClosed = true
 				}
 			}

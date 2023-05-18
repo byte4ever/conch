@@ -22,7 +22,6 @@ func sieveTimeGenerator(
 	ctx context.Context,
 	maxId int,
 ) <-chan *sieveTime {
-
 	outStream := make(chan *sieveTime)
 
 	go func() {
@@ -53,6 +52,7 @@ func countSieveTime(i int, input <-chan *sieveTime) {
 	}
 
 	count++
+
 	curAvg := time.Since(t.createAt)
 
 	for t := range input {
@@ -212,7 +212,9 @@ func TestSieve2(t *testing.T) {
 	outStreams := SieveTree(ctx, index, nbOutputs, testStream)
 
 	var wg sync.WaitGroup
+
 	var start sync.WaitGroup
+
 	start.Add(1)
 	wg.Add(nbOutputs + 1)
 

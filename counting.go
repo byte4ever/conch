@@ -5,14 +5,14 @@ import (
 	"sync"
 )
 
-func Counting[T any, R Integer](
+func Counting[T any](
 	ctx context.Context,
 	inStream <-chan T,
-) <-chan R {
-	outStream := make(chan R)
+) <-chan int {
+	outStream := make(chan int)
 
 	go func() {
-		var cnt R
+		var cnt int
 
 		defer close(outStream)
 
@@ -38,17 +38,13 @@ func Counting[T any, R Integer](
 	return outStream
 }
 
-type ChainFunc[T any] func(
-	ctx context.Context,
-	group *sync.WaitGroup,
-	inStream <-chan T,
-)
-
-func CountingC[T any, R Integer](
-	chain ChainFunc[R],
+func CountingC[T any](
+	chain ChainFunc[int],
 ) ChainFunc[T] {
-	return func(ctx context.Context, group *sync.WaitGroup, inStream <-chan T) {
-		s := Counting[T, R](ctx, inStream)
+	return func(
+		ctx context.Context, group *sync.WaitGroup, inStream <-chan T,
+	) {
+		s := Counting(ctx, inStream)
 		chain(ctx, group, s)
 	}
 }

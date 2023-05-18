@@ -2,12 +2,13 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 func Filter[T any](
 	ctx context.Context,
 	inStream <-chan T,
-	filter func(ctx context.Context, v T) bool,
+	filter FilterFunc[T],
 ) <-chan T {
 	outStream := make(chan T)
 
@@ -36,4 +37,17 @@ func Filter[T any](
 	}()
 
 	return outStream
+}
+
+func FilterC[T any](
+	filter FilterFunc[T],
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, Filter(ctx, inStream, filter))
+	}
 }

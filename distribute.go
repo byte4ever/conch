@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 // Distribute generates a stream by sequentially picking elements from the
@@ -19,7 +20,7 @@ func Distribute[T any](
 	outStream := make(chan T)
 
 	if containsDuplicate(inStream) {
-		panic("distribute with duplicate input stream")
+		panic("Distribute: with duplicate input stream")
 	}
 
 	go func() {
@@ -68,4 +69,101 @@ func Distribute[T any](
 	}()
 
 	return outStream
+}
+
+type ChainOp[T any] func(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	inStream <-chan T,
+	outStream *<-chan T,
+)
+
+func OutC[T any](outputStream chan<- T) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case e, more := <-inStream:
+					if !more {
+						return
+					}
+
+					select {
+					case <-ctx.Done():
+						return
+					case outputStream <- e:
+					}
+				}
+			}
+		}()
+	}
+}
+
+func OpC[T any](insert ChainOp[T], others ...ChainFunc[T]) []ChainFunc[T] {
+	lo := len(others)
+	out := make([]ChainFunc[T], lo)
+
+	for i := 0; i < lo; i++ {
+		idx := i
+		out[i] = func(
+			ctx context.Context, wg *sync.WaitGroup, inStream <-chan T,
+		) {
+			var outStream <-chan T
+
+			insert(ctx, wg, inStream, &outStream)
+			others[idx](ctx, wg, outStream)
+		}
+	}
+
+	return out
+}
+
+func DistributeC[T any](
+	count int,
+	chain ChainFunc[T],
+) []ChainFunc[T] {
+	var (
+		mainWg sync.WaitGroup
+		iWg    *sync.WaitGroup
+		iCtx   context.Context
+	)
+
+	r := make([]ChainFunc[T], count)
+	s := make([]<-chan T, count)
+
+	mainWg.Add(count)
+
+	for i := 0; i < count; i++ {
+		j := i
+		r[i] = func(
+			ctx context.Context, wg *sync.WaitGroup, inStream <-chan T,
+		) {
+			defer mainWg.Done()
+
+			if j == 0 {
+				// capture context and wait group
+				iCtx = ctx
+				iWg = wg
+			}
+
+			s[j] = inStream
+		}
+	}
+
+	go func() {
+		mainWg.Wait()
+		chain(iCtx, iWg, Distribute(iCtx, s...))
+	}()
+
+	return r
 }

@@ -145,6 +145,7 @@ func recBuildTeeTreeIdx[T any](
 	if in < 0 || out < 0 {
 		panic("shit")
 	}
+
 	lo := out - in
 
 	if lo == 2 {
@@ -155,6 +156,7 @@ func recBuildTeeTreeIdx[T any](
 			ln,
 			ln,
 		)
+
 		return
 	}
 
@@ -174,6 +176,7 @@ func recBuildTeeTreeIdx[T any](
 			ln,
 			ln,
 		)
+
 		return
 	}
 

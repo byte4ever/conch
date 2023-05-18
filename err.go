@@ -4,11 +4,6 @@ import (
 	"context"
 )
 
-type ValErrorPair[V any] struct {
-	V   V
-	Err error
-}
-
 func Separate[V any](
 	ctx context.Context,
 	inSTream <-chan ValErrorPair[V],
@@ -27,6 +22,7 @@ func Separate[V any](
 				case <-ctx.Done():
 					return
 				}
+
 				continue
 			}
 

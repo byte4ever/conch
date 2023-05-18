@@ -25,7 +25,7 @@ func TestPathGenerator(t *testing.T) {
 	conch.ProcessorPoolC(
 		64,
 		conch.GetProcessorFor(ProcessRequest),
-		conch.Consumer(
+		conch.ConsumerC(
 			func(ctx context.Context, resp *FileHashResponse) {
 				fmt.Println(
 					resp.Path,

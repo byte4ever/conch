@@ -45,7 +45,6 @@ func Skip[T any](
 				case outStream <- e:
 				}
 			}
-
 		}
 	}()
 

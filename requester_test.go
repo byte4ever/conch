@@ -2,10 +2,11 @@ package conch
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"math/rand"
+	"strconv"
+	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,12 +14,76 @@ import (
 	"go.uber.org/goleak"
 )
 
-var errF = errors.New("invalid value")
-
 func f(_ context.Context, v int) (int, error) {
-	time.Sleep(2 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
 
 	return v, nil
+}
+
+type sstat struct {
+	i   int
+	cnt int64
+	md  time.Duration
+}
+
+func generateDummy(ctx context.Context) <-chan struct{} {
+	outStream := make(chan struct{})
+
+	go func() {
+		defer close(outStream)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case outStream <- struct{}{}:
+			}
+		}
+	}()
+
+	return outStream
+}
+
+type cc struct {
+	mtx sync.Mutex
+	d   time.Duration
+	cnt int64
+}
+
+type ccs []*cc
+
+func newCCS(n int) ccs {
+	r := make(ccs, n)
+
+	for i := 0; i < n; i++ {
+		r[i] = &cc{}
+	}
+
+	return r
+}
+
+func (c ccs) refresh(idx int, d time.Duration) {
+	p := c[idx]
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	p.d += d
+	p.cnt++
+}
+
+func (c ccs) String() string {
+	var sb strings.Builder
+
+	for i, p := range c {
+		sb.WriteString(strconv.Itoa(i))
+		sb.WriteString(": ")
+		sb.WriteString(strconv.FormatInt(p.cnt, 10))
+		sb.WriteString(" ")
+		sb.WriteString((p.d / time.Duration(p.cnt)).String())
+		sb.WriteRune('\n')
+	}
+
+	return sb.String()
 }
 
 func TestRequester(t *testing.T) {
@@ -27,93 +92,60 @@ func TestRequester(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	ctxEnd, ctxEndCancel := context.WithTimeout(ctx, 60*time.Second)
+	defer ctxEndCancel()
+
 	const prioSpread = 10
 
-	prioRequesters := make(
-		[]func(
-			context.Context,
-			int,
-		) (
-			int,
-			error,
+	var wg sync.WaitGroup
+
+	prioRequesters := UnfairRequestersC(
+		ctx,
+		&wg,
+		prioSpread,
+		RequestConsumerPoolC(
+			func(_ context.Context, _ struct{}) (struct{}, error) {
+				return struct{}{}, nil
+			}, prioSpread,
 		),
-		prioSpread,
 	)
 
-	streams := make(
-		[]<-chan Request[int, int],
-		prioSpread,
-	)
+	c := newCCS(prioSpread)
 
-	for i := 0; i < prioSpread; i++ {
-		prioRequesters[i], streams[i] = Requester[int, int](ctx)
-	}
+	var wg2 sync.WaitGroup
 
-	unfairStream := UnfairFanIn(ctx, streams...)
+	ConsumerPoolC(
+		1000,
+		func(_ context.Context, v struct{}) {
+			rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+			idx := rnd.Intn(prioSpread)
+			start := time.Now()
+			_, _ = prioRequesters[idx](ctxEnd, struct{}{})
+			c.refresh(idx, time.Since(start))
+		},
+	)(ctxEnd, &wg2, generateDummy(ctxEnd))
 
-	watchStream := unfairStream
+	wg2.Wait()
 
-	SpawnRequestProcessorsPool(ctx, watchStream, f, 4, "proc")
-
-	const parallelism = prioSpread
-	var wg, start sync.WaitGroup
-
-	wg.Add(parallelism)
-	start.Add(1)
-
-	var totCnt atomic.Int64
-
-	for i := 0; i < parallelism; i++ {
-		go func(i int) {
-			defer wg.Done()
-
-			var (
-				cnt int64
-				md  time.Duration
-			)
-
-			first := true
-
-			start.Wait()
-			end := time.Now().Add(20 * time.Second)
-			for time.Now().Before(end) {
-				s := time.Now()
-				_, _ = prioRequesters[i](ctx, i)
-				d := time.Since(s)
-
-				if first {
-					md = d
-				} else {
-					md = (md + d) / 2
-				}
-
-				cnt++
-
-				first = false
-				// time.Sleep(4 * time.Millisecond)
-			}
-
-			fmt.Println(i, cnt, md)
-			totCnt.Add(cnt)
-		}(i)
-	}
-
-	start.Done()
+	cancel()
 	wg.Wait()
-	fmt.Println(totCnt.Load())
+
+	fmt.Println(c.String())
 }
 
 func TestRequestProcessor(t *testing.T) {
 	var wg sync.WaitGroup
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	requester := RequesterC(
 		ctx,
 		&wg,
-		RequestProcessorPoolC(
+		RequestConsumerPoolC(
 			func(ctx context.Context, v int) (int, error) {
 				return v, nil
-			}, 32, "",
+			}, 32,
 		),
 	)
 

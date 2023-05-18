@@ -2,6 +2,7 @@ package conch
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -71,4 +72,17 @@ func Delay[T any](
 	}()
 
 	return outStream
+}
+
+func DelayC[T any](
+	durationGenerator DurationGenerator,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, Delay(ctx, durationGenerator, inStream))
+	}
 }

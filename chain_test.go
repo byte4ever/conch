@@ -9,7 +9,6 @@ import (
 )
 
 func TestChain(t *testing.T) {
-
 	t.Run(
 		"success", func(t *testing.T) {
 			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
@@ -48,5 +47,4 @@ func TestChain(t *testing.T) {
 			)
 		},
 	)
-
 }

@@ -138,10 +138,6 @@ func TestOpenedValve(t *testing.T) {
 		"close input no value", func(t *testing.T) {
 			t.Parallel()
 
-			const (
-				testValue = 10101
-			)
-
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -156,10 +152,6 @@ func TestOpenedValve(t *testing.T) {
 	t.Run(
 		"cancel ctx no val", func(t *testing.T) {
 			t.Parallel()
-
-			const (
-				testValue = 10101
-			)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -294,10 +286,6 @@ func TestOpenedValve(t *testing.T) {
 	t.Run(
 		"close input before creation", func(t *testing.T) {
 			t.Parallel()
-
-			const (
-				testValue = 10101
-			)
 
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()

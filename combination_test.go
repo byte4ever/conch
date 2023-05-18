@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -28,181 +27,116 @@ func TestCombinationsIndexes(t *testing.T) {
 			big.NewInt(r),
 		).Int64(), cnt,
 	)
-	t.Log(cnt, " combinations generated")
 }
 
-func fact(n *big.Int) *big.Int {
-	if n.Sign() < 1 {
-		return big.NewInt(0)
-	}
+func TestCombinationsIndexes2(t *testing.T) {
+	const (
+		n = 11
+		r = 5
+	)
 
-	r := big.NewInt(1)
-
-	i := big.NewInt(2)
-
-	for i.Cmp(n) < 1 {
-		r.Mul(r, i)
-		i.Add(i, big.NewInt(1))
-	}
-
-	return r
-}
-
-func comb(n, r *big.Int) *big.Int {
-	if r.Cmp(n) == 1 {
-		return big.NewInt(0)
-	}
-
-	if r.Cmp(n) == 0 {
-		return big.NewInt(1)
-	}
-
-	c := fact(n)
-
-	den := fact(n.Sub(n, r))
-	den.Mul(den, fact(r))
-	c.Div(c, den)
-
-	return c
-}
-
-func TestCombinationsIndexesWithReplacement(t *testing.T) {
-	var cnt int
-
-	s := time.Now()
+	var cnt int64
 
 	for range CombinationsIndexesWithReplacement(
-		context.Background(), 17, 8,
+		context.Background(),
+		uint(n),
+		uint(r),
 	) {
 		cnt++
 	}
 
-	fmt.Println(time.Since(s), cnt)
+	fmt.Println(cnt)
+
+	require.Equal(
+		t, combWithRep(n, r).Int64(), cnt,
+	)
+}
+
+func TestCombinationsIndexesWithReplacement(t *testing.T) {
+	var l [][]uint
+
+	for p := range CombinationsIndexesWithReplacement(
+		context.Background(),
+		uint(5),
+		uint(3),
+	) {
+		l = append(l, p)
+	}
+
+	expected := [][]uint{
+		{0, 0, 0},
+		{0, 0, 1},
+		{0, 0, 2},
+		{0, 0, 3},
+		{0, 0, 4},
+		{0, 1, 1},
+		{0, 1, 2},
+		{0, 1, 3},
+		{0, 1, 4},
+		{0, 2, 2},
+		{0, 2, 3},
+		{0, 2, 4},
+		{0, 3, 3},
+		{0, 3, 4},
+		{0, 4, 4},
+		{1, 1, 1},
+		{1, 1, 2},
+		{1, 1, 3},
+		{1, 1, 4},
+		{1, 2, 2},
+		{1, 2, 3},
+		{1, 2, 4},
+		{1, 3, 3},
+		{1, 3, 4},
+		{1, 4, 4},
+		{2, 2, 2},
+		{2, 2, 3},
+		{2, 2, 4},
+		{2, 3, 3},
+		{2, 3, 4},
+		{2, 4, 4},
+		{3, 3, 3},
+		{3, 3, 4},
+		{3, 4, 4},
+		{4, 4, 4},
+	}
+
+	require.Equal(t, expected, l)
 }
 
 func TestCombinations(t *testing.T) {
+	var l [][]string
+
 	for p := range Combinations(
 		context.Background(),
 		[]string{"a", "b", "c", "d", "e", "f"},
 		3,
 	) {
-		fmt.Println(p)
-	}
-}
-
-func p(x []int, k, n, r int, f func([]int), depth int) {
-	fmt.Println(" - ", depth, k, x, n, r)
-	// if depth == 3 {
-	// 	return
-	// }
-
-	if r == 0 {
-		f(x)
-		return
+		l = append(l, p)
 	}
 
-	for i := k; i < n-r+1; i++ {
-		x[depth] = i
-		p(x, i, n, r-1, f, depth+1)
+	expected := [][]string{
+		{"a", "b", "c"},
+		{"a", "b", "d"},
+		{"a", "b", "e"},
+		{"a", "b", "f"},
+		{"a", "c", "d"},
+		{"a", "c", "e"},
+		{"a", "c", "f"},
+		{"a", "d", "e"},
+		{"a", "d", "f"},
+		{"a", "e", "f"},
+		{"b", "c", "d"},
+		{"b", "c", "e"},
+		{"b", "c", "f"},
+		{"b", "d", "e"},
+		{"b", "d", "f"},
+		{"b", "e", "f"},
+		{"c", "d", "e"},
+		{"c", "d", "f"},
+		{"c", "e", "f"},
+		{"d", "e", "f"},
 	}
-}
 
-func Test2(t *testing.T) {
-
-	// n := 7
-	//
-	// for i := 0; i < n-2; i++ {
-	// 	for j := i; j < n-1; j++ {
-	// 		for k := j; k < n; k++ {
-	// 			fmt.Println(i, j, k)
-	// 		}
-	// 	}
-	// }
-
-	x := make([]int, 3)
-	p(
-		x, 0, 7, 3, func(x []int) {
-			fmt.Println(x)
-		}, 0,
-	)
-}
-
-// idea: custom number system with 2s complement like 0b10...0==MIN stop case
-// void combination_with_repetiton(int n, int k) {
-//  while (1) {
-//    for (int i = k; i > 0; i -= 1) {
-//      if (pos[i] > n - 1) // if number spilled over: xx0(n-1)xx
-//      {
-//        pos[i - 1] += 1; // set xx1(n-1)xx
-//        for (int j = i; j <= k; j += 1)
-//          pos[j] = pos[j - 1]; // set xx11..1
-//      }
-//    }
-//    if (pos[0] > 0) // stop condition: 1xxxx
-//      break;
-//    printDonuts(k);
-//    pos[k] += 1; // xxxxN -> xxxxN+1
-//  }
-// }
-
-// void comb(int m, int n, unsigned char *c)
-// {
-//	int i;
-//	for (i = 0; i < n; i++) c[i] = n - i;
-//
-//	while (1) {
-//		for (i = n; i--;)
-//			printf("%d%c", c[i], i ? ' ': '\n');
-//
-//		/* this check is not strictly necessary, but if m is not close to n,
-//		   it makes the whole thing quite a bit faster */
-//		i = 0;
-//		if (c[i]++ < m) continue;
-//
-//		for (; c[i] >= m - i;) if (++i >= n) return;
-//		for (c[i]++; i; i--) c[i-1] = c[i] + 1;
-//	}
-// }
-
-func combination_with_repetition(n, k uint8) {
-
-	var cnt int
-	defer func() {
-		fmt.Println(cnt)
-	}()
-
-	indexes := make([]uint8, k+1)
-	// pt := indexes[1:]
-	for {
-		for i := k; i > 0; i-- {
-			if indexes[i] > n-1 {
-				indexes[i-1]++
-				for j := i; j <= k; j++ {
-					indexes[j] = indexes[j-1]
-				}
-			}
-		}
-
-		if indexes[0] > 0 {
-			break
-		}
-
-		cnt++
-		// fmt.Printf("%8d ", cnt)
-
-		// for x := uint8(1); x < k+1; x++ {
-		// 	fmt.Printf("%d ", indexes[x])
-		// }
-		//
-		// fmt.Println(
-		// 	"",
-		// )
-		// fmt.Println(pt)
-		indexes[k]++
-	}
-}
-
-func TestShit(t *testing.T) {
-	combination_with_repetition(8, 4)
-	// combination(8, 3)
+	require.Equal(t, expected, l)
 }

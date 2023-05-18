@@ -1155,7 +1155,7 @@ linters-settings:
     # Show functions with maintainability index lower than N.
     # A high index indicates better maintainability (it's kind of the opposite of complexity).
     # Default: 20
-    under: 40
+    under: 20
 
   makezero:
     # Allow only slices initialized with a length of zero.
@@ -1965,7 +1965,7 @@ linters:
     #    - bodyclose
     #    - containedctx
     #    - contextcheck
-    #    - cyclop
+    - cyclop
     #    - deadcode
     #    - decorder
     #    - depguard
@@ -2048,7 +2048,7 @@ linters:
       #    - tagliatelle
       #    - tenv
       #    - testableexamples
-      #    - testpackage
+    - testpackage
       #    - thelper
       #    - tparallel
       #    - typecheck

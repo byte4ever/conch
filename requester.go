@@ -2,35 +2,79 @@ package conch
 
 import (
 	"context"
-	"fmt"
 	"sync"
 )
 
-type Request[P any, R any] struct {
-	P      P
-	ChResp chan<- ValErrorPair[R]
+// UnfairRequesters returns a list of thread safe requester functions in
+// priority order. Priority order follows index in the slice.
+//
+// This mean first requester in the slice got the lowest priority and the latest
+// requester in the slice got the highest one.
+//
+// Keep in mind that priority effect is only achieved under high pressure.
+func UnfairRequesters[P, R any](
+	ctx context.Context,
+	count int,
+) (
+	[]RequestFunc[P, R],
+	<-chan Request[P, R],
+) {
+	prioRequesters := make(
+		[]RequestFunc[P, R],
+		count,
+	)
+
+	streams := make(
+		[]<-chan Request[P, R],
+		count,
+	)
+
+	for i := 0; i < count; i++ {
+		prioRequesters[i], streams[i] = Requester[P, R](ctx)
+	}
+
+	return prioRequesters, UnfairFanIn(ctx, streams...)
+}
+
+// UnfairRequestersC is the chained version of UnfairRequesters.
+func UnfairRequestersC[P, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	count int,
+	chain ChainFunc[Request[P, R]],
+) []RequestFunc[P, R] {
+	requesters, o := UnfairRequesters[P, R](ctx, count)
+
+	chain(ctx, wg, o)
+
+	return requesters
 }
 
 func Requester[P, R any](ctx context.Context) (
-	func(
-		context.Context,
-		P,
-	) (
-		R,
-		error,
-	),
+	RequestFunc[P, R],
 	<-chan Request[P, R],
 ) {
+	var wg sync.WaitGroup
 	outStream := make(chan Request[P, R])
 
 	go func() {
 		defer close(outStream)
+		defer wg.Wait()
 		select {
 		case <-ctx.Done():
 			return
 		}
 	}()
 
+	return requestFun[P, R](ctx, &wg, outStream),
+		outStream
+}
+
+func requestFun[P, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	outStream chan Request[P, R],
+) RequestFunc[P, R] {
 	return func(
 		innerCtx context.Context,
 		params P,
@@ -40,25 +84,42 @@ func Requester[P, R any](ctx context.Context) (
 	) {
 		var zeroR R
 
-		chResp := make(chan ValErrorPair[R])
+		chResp := make(chan ValErrorPair[R], 1)
 
 		if innerCtx.Err() != nil {
 			return zeroR, ctx.Err()
 		}
 
-		req := Request[P, R]{
-			P:      params,
-			ChResp: chResp,
+		if ctx.Err() != nil {
+			return zeroR, ctx.Err()
 		}
 
+		req := Request[P, R]{
+			P: params,
+			Return: func(ctx context.Context, v ValErrorPair[R]) {
+				defer close(chResp)
+
+				select {
+				case <-ctx.Done():
+					return
+				case chResp <- v:
+				}
+			},
+		}
+
+		// send request
+		wg.Add(1)
 		select {
 		case outStream <- req:
 		case <-ctx.Done():
+			wg.Done()
 			return zeroR, ctx.Err()
 		case <-innerCtx.Done():
+			wg.Done()
 			return zeroR, innerCtx.Err()
 		}
 
+		// receive response
 		select {
 		case rv := <-chResp:
 			return rv.V, rv.Err
@@ -67,122 +128,95 @@ func Requester[P, R any](ctx context.Context) (
 		case <-innerCtx.Done():
 			return zeroR, innerCtx.Err()
 		}
-	}, outStream
+	}
 }
 
 func RequesterC[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	chain ChainFunc[Request[P, R]],
-) func(context.Context, P) (R, error) {
+) RequestFunc[P, R] {
 	requester, s := Requester[P, R](ctx)
 	chain(ctx, wg, s)
 
 	return requester
 }
 
-func RequestProcessor[P any, R any](
+func RequestConsumer[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	inStream <-chan Request[P, R],
-	processing func(context.Context, P) (R, error),
-	id string,
+	processing RequestFunc[P, R],
 ) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	Consumer[Request[P, R]](
+		ctx, wg, func(ctx context.Context, p Request[P, R]) {
+			res, err := processing(ctx, p.P)
 
-		for req := range inStream {
-			result, err := processing(ctx, req.P)
-			select {
-			case req.ChResp <- ValErrorPair[R]{V: result, Err: err}:
-				close(req.ChResp)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+			p.Return(
+				ctx, ValErrorPair[R]{
+					V:   res,
+					Err: err,
+				},
+			)
+		}, inStream,
+	)
 }
 
-func RequestProcessorPool[P any, R any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	inStream <-chan Request[P, R],
-	processing func(context.Context, P) (R, error),
-	count int,
-	id string,
-) {
-
-	for i := 0; i < count; i++ {
-		RequestProcessor(
-			ctx,
-			wg,
-			inStream,
-			processing,
-			fmt.Sprintf("%s-%d", id, i),
-		)
-	}
-}
-
-func RequestProcessorPoolC[P any, R any](
-	processing func(context.Context, P) (R, error),
-	count int,
-	id string,
+func RequestConsumerC[P any, R any](
+	processing RequestFunc[P, R],
 ) ChainFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
 		inStream <-chan Request[P, R],
 	) {
-		RequestProcessorPool(ctx, wg, inStream, processing, count, id)
-	}
-}
-
-func SpawnRequestProcessor[P any, R any](
-	ctx context.Context,
-	inStream <-chan Request[P, R],
-	processing func(context.Context, P) (R, error),
-	id string,
-) func() {
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
-
-		for req := range inStream {
-			result, err := processing(ctx, req.P)
-			select {
-			case req.ChResp <- ValErrorPair[R]{V: result, Err: err}:
-				close(req.ChResp)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	return wg.Wait
-}
-
-func SpawnRequestProcessorsPool[P any, R any](
-	ctx context.Context, inStream <-chan Request[P, R],
-	processing func(context.Context, P) (R, error), count int, id string,
-) func() {
-	f := make([]func(), count)
-
-	for i := 0; i < count; i++ {
-		f[i] = SpawnRequestProcessor(
-			ctx,
-			inStream,
-			processing,
-			fmt.Sprintf("%s-%d", id, i),
+		RequestConsumer(
+			ctx, wg, inStream, processing,
 		)
 	}
+}
 
-	return func() {
-		for _, f := range f {
-			f()
+func RequestConsumerPool[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	inStream <-chan Request[P, R],
+	processing RequestFunc[P, R],
+	count int,
+) {
+	for i := 0; i < count; i++ {
+		RequestConsumer(
+			ctx,
+			wg,
+			inStream,
+			processing,
+		)
+	}
+}
+
+func RequestConsumerPoolC[P any, R any](
+	processing RequestFunc[P, R],
+	count int,
+) ChainFunc[Request[P, R]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan Request[P, R],
+	) {
+		RequestConsumerPool(ctx, wg, inStream, processing, count)
+	}
+}
+
+func PoolC[T any](
+	count int,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		for i := 0; i < count; i++ {
+			chain(ctx, wg, inStream)
 		}
 	}
 }

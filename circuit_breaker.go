@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-type CircuitState uint32
+type (
+	engineEvent  uint8
+	CircuitState uint32
+)
 
 const (
 	CircuitUndefined CircuitState = iota // UNDEFINED
@@ -16,9 +19,7 @@ const (
 	CircuitHalfOpen                      // HALF_OPEN
 )
 
-type engineEvent uint8
-
-const (
+const ( //nolint:decorder,grouper // we want that
 	engineEventSuccess engineEvent = iota // EVT_SUCCESS
 	engineEventFailure                    // EVT_FAILURE
 	engineEventRefresh                    // EVT_REFRESH
@@ -216,46 +217,24 @@ func Breaker[P any, R any](
 				switch <-chState {
 				case CircuitOpen:
 					// Drop new requests
-					select {
-					case req.ChResp <- ValErrorPair[R]{
-						Err: breakerError,
-					}:
-						refresh(ctx)
-					case <-ctx.Done():
-						return
-					}
+					req.Return(ctx, ValErrorPair[R]{Err: breakerError})
+					refresh(ctx)
 				case CircuitClosed, CircuitHalfOpen:
-					// Let request continue but intercept response to track
-					// errors
-					chResp := make(chan ValErrorPair[R])
-					go func(c chan ValErrorPair[R]) {
-						defer close(req.ChResp)
-						select {
-						case vep, more := <-c:
-							// fmt.Println(">>> ", vep)
-							if !more {
-								return
-							}
-
-							if vep.Err == nil {
-								success(ctx)
-							} else {
-								failure(ctx)
-							}
-							select {
-							case req.ChResp <- vep:
-							case <-ctx.Done():
-								return
-							}
-						case <-ctx.Done():
-							return
-						}
-					}(chResp)
-
 					select {
 					case outStream <- Request[P, R]{
-						P:      req.P,
-						ChResp: chResp,
+						P: req.P,
+						Return: func(
+							ctx context.Context,
+							v ValErrorPair[R],
+						) {
+							if v.Err != nil {
+								failure(ctx)
+							} else {
+								success(ctx)
+							}
+
+							req.Return(ctx, v)
+						},
 					}:
 					case <-ctx.Done():
 						return

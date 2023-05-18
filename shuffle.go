@@ -3,6 +3,7 @@ package conch
 import (
 	"context"
 	"math/rand"
+	"sync"
 )
 
 // Shuffle generates a stream by randomly picking elements from the
@@ -23,7 +24,7 @@ func Shuffle[T any](
 	outStream := make(chan T)
 
 	if containsDuplicate(inStream) {
-		panic("distribute with duplicate input stream")
+		panic("Shuffle: with duplicate input stream")
 	}
 
 	go func() {
@@ -78,4 +79,45 @@ func Shuffle[T any](
 	}()
 
 	return outStream
+}
+
+func ShuffleC[T any](
+	count int,
+	rnd *rand.Rand,
+	chain ChainFunc[T],
+) []ChainFunc[T] {
+	var (
+		mainWg sync.WaitGroup
+		iWg    *sync.WaitGroup
+		iCtx   context.Context
+	)
+
+	r := make([]ChainFunc[T], count)
+	s := make([]<-chan T, count)
+
+	mainWg.Add(count)
+
+	for i := 0; i < count; i++ {
+		j := i
+		r[i] = func(
+			ctx context.Context, wg *sync.WaitGroup, inStream <-chan T,
+		) {
+			defer mainWg.Done()
+
+			if j == 0 {
+				// capture context and wait group
+				iCtx = ctx
+				iWg = wg
+			}
+
+			s[j] = inStream
+		}
+	}
+
+	go func() {
+		mainWg.Wait()
+		chain(iCtx, iWg, Shuffle(iCtx, rnd, s...))
+	}()
+
+	return r
 }

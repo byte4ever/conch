@@ -2,12 +2,13 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 func Transform[In any, Out any](
 	ctx context.Context,
-	inStream <-chan In,
 	transformer func(ctx context.Context, in In) Out,
+	inStream <-chan In,
 ) <-chan Out {
 	outStream := make(chan Out)
 
@@ -36,4 +37,18 @@ func Transform[In any, Out any](
 	}()
 
 	return outStream
+}
+
+func TransformC[In any, Out any](
+	transformer func(ctx context.Context, in In) Out,
+	chain ChainFunc[Out],
+) ChainFunc[In] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan In,
+	) {
+		s := Transform(ctx, transformer, inStream)
+		chain(ctx, wg, s)
+	}
 }

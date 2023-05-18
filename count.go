@@ -2,11 +2,12 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 func Count[T any](
-	inStream <-chan T,
 	ctx context.Context,
+	inStream <-chan T,
 ) (count <-chan int) {
 	var c int
 
@@ -29,4 +30,14 @@ func Count[T any](
 	}()
 
 	return iCount
+}
+
+func CountC[T any](chain ChainFunc[int]) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, Count(ctx, inStream))
+	}
 }

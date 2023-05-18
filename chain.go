@@ -2,16 +2,8 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
-
-func containsDuplicate[T comparable](list []T) bool {
-	dedup := make(map[T]struct{}, len(list))
-	for _, t := range list {
-		dedup[t] = struct{}{}
-	}
-
-	return len(dedup) < len(list)
-}
 
 // Chain performs streams concatenation.
 // It generates a new stream that will produce all the elements from the
@@ -65,4 +57,44 @@ func Chain[T any](
 	}()
 
 	return outStream
+}
+
+func ChainC[T any](
+	count int,
+	chain ChainFunc[T],
+) []ChainFunc[T] {
+	var (
+		mainWg sync.WaitGroup
+		iWg    *sync.WaitGroup
+		iCtx   context.Context
+	)
+
+	r := make([]ChainFunc[T], count)
+	s := make([]<-chan T, count)
+
+	mainWg.Add(count)
+
+	for i := 0; i < count; i++ {
+		j := i
+		r[i] = func(
+			ctx context.Context, wg *sync.WaitGroup, inStream <-chan T,
+		) {
+			defer mainWg.Done()
+
+			if j == 0 {
+				// capture context and wait group
+				iCtx = ctx
+				iWg = wg
+			}
+
+			s[j] = inStream
+		}
+	}
+
+	go func() {
+		mainWg.Wait()
+		chain(iCtx, iWg, Chain(iCtx, s...))
+	}()
+
+	return r
 }

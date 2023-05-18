@@ -9,18 +9,19 @@ import (
 	"time"
 )
 
-type FileHashRequest struct {
-	Path   string
-	Hasher crypto.Hash
-}
-
-type FileHashResponse struct {
-	FileHashRequest
-	Size     int64
-	Duration time.Duration
-	Hash     []byte
-	Err      error
-}
+type (
+	FileHashRequest struct {
+		Path   string
+		Hasher crypto.Hash
+	}
+	FileHashResponse struct {
+		FileHashRequest
+		Size     int64
+		Duration time.Duration
+		Hash     []byte
+		Err      error
+	}
+)
 
 func HashFilesProcessor(
 	ctx context.Context,

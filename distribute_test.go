@@ -3,11 +3,13 @@ package conch
 import (
 	"context"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 func fakeStream(prefix string, count int) <-chan string {
@@ -255,4 +257,63 @@ func TestDistribute(t *testing.T) {
 			)
 		},
 	)
+}
+
+func TestLab(t *testing.T) {
+	t.Parallel()
+	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+	var res []string
+
+	stream := fakeStream("test", 100)
+
+	var wg sync.WaitGroup
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	SplitC(
+		OpC(
+			func(
+				ctx context.Context,
+				wg *sync.WaitGroup,
+				inStream <-chan string,
+				outStream *<-chan string,
+			) {
+				*outStream = Transform(
+					ctx,
+					func(ctx context.Context, in string) string {
+						return fmt.Sprintf("ooo-%s", in)
+					},
+					inStream,
+				)
+			},
+			DistributeC(
+				10,
+				TransformC(
+					func(ctx context.Context, in string) string {
+						return fmt.Sprintf("a-%s", in)
+					},
+					ConsumerC(
+						func(ctx context.Context, t string) {
+							res = append(res, t)
+						},
+					),
+				),
+			)...,
+		)...,
+	)(ctx, &wg, stream)
+
+	require.Eventually(
+		t,
+		func() bool {
+			wg.Wait()
+
+			return true
+		},
+		time.Second,
+		time.Millisecond,
+	)
+
+	require.Equal(t, []string{}, res)
 }
