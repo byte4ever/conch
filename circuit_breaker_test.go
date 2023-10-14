@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/goleak"
 )
 
 var (
@@ -19,6 +20,11 @@ var (
 )
 
 func Test_PassingNoError(t *testing.T) {
+	defer goleak.VerifyNone(
+		t,
+		goleak.IgnoreCurrent(),
+	)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -44,7 +50,10 @@ func Test_PassingNoError(t *testing.T) {
 			group *sync.WaitGroup,
 			inStream <-chan Request[int, int],
 		) {
+			group.Add(1)
+
 			go func() {
+				defer group.Done()
 				for {
 					select {
 					case <-ctx.Done():
@@ -91,10 +100,17 @@ func Test_PassingNoError(t *testing.T) {
 		return true
 	}, time.Second, time.Millisecond)
 
+	close(inStream)
+
 	wg.Wait()
 }
 
 func Test_Blocking(t *testing.T) {
+	defer goleak.VerifyNone(
+		t,
+		goleak.IgnoreCurrent(),
+	)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -116,7 +132,10 @@ func Test_Blocking(t *testing.T) {
 			group *sync.WaitGroup,
 			inStream <-chan Request[int, int],
 		) {
+			group.Add(1)
+
 			go func() {
+				defer group.Done()
 				for {
 					select {
 					case <-ctx.Done():
@@ -165,10 +184,17 @@ func Test_Blocking(t *testing.T) {
 		return true
 	}, time.Second, time.Millisecond)
 
+	close(inStream)
+
 	wg.Wait()
 }
 
 func Test_PassingError(t *testing.T) {
+	defer goleak.VerifyNone(
+		t,
+		goleak.IgnoreCurrent(),
+	)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -194,7 +220,10 @@ func Test_PassingError(t *testing.T) {
 			group *sync.WaitGroup,
 			inStream <-chan Request[int, int],
 		) {
+			group.Add(1)
+
 			go func() {
+				defer group.Done()
 				for {
 					select {
 					case <-ctx.Done():
@@ -239,6 +268,8 @@ func Test_PassingError(t *testing.T) {
 
 		return true
 	}, time.Second, time.Millisecond)
+
+	close(inStream)
 
 	wg.Wait()
 }
