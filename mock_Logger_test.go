@@ -21,7 +21,7 @@ func (_m *MockLogger) Debug(msg string, fields ...map[string]interface{}) {
 	_m.Called(_ca...)
 }
 
-// PanicError provides a mock function with given fields: msg, fields
+// Error provides a mock function with given fields: msg, fields
 func (_m *MockLogger) Error(msg string, fields ...map[string]interface{}) {
 	_va := make([]interface{}, len(fields))
 	for _i := range fields {

@@ -3,14 +3,11 @@ package conch
 import (
 	"context"
 	"errors"
-	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/goleak"
 )
 
 var (
@@ -21,109 +18,227 @@ var (
 	ErrUnavailable = errors.New("unavailable")
 )
 
-func TestBreaker(t *testing.T) {
-	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+func Test_PassingNoError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	const count = 300
+	var wg sync.WaitGroup
 
-	testDuration := 2 * time.Second
+	be := NewMockBreakerEngine(t)
+	be.
+		On("IsOpen").
+		Return(false).
+		Once()
+	be.
+		On("ReportSuccess").
+		Return().
+		Once()
 
-	for x := 0; x < count; x++ {
-		fmt.Println("test: ", x)
+	inStream := make(chan Request[int, int])
 
-		var wg sync.WaitGroup
-
-		ctx, cancel := context.WithTimeout(context.Background(), testDuration)
-		defer cancel()
-
-		const concurrency = 16
-
-		requester := RequesterC(
-			ctx,
-			&wg,
-			BreakerC(
-				4,
-				3,
-				20*time.Millisecond,
-				ErrUnavailable,
-				RequestConsumerPoolC(
-					func(ctx context.Context, p2 int) (int, error) {
-						if rand.Float64() < 0.1 {
-							return 0, ErrBadass
-						}
-						//time.Sleep(5 * time.Millisecond)
-						return p2, nil
-					},
-					concurrency,
-				),
-			),
-		)
-
-		var (
-			wgStart sync.WaitGroup
-		)
-
-		//counters := make([]int, concurrency)
-
-		wgStart.Add(1)
-
-		wg.Add(concurrency)
-
-		for i := 0; i < concurrency; i++ {
-			go func(
-				idx int,
-				wgStart *sync.WaitGroup,
-				wg *sync.WaitGroup,
-			) {
-				//defer fmt.Println("requester ", idx, "done")
-				defer wg.Done()
-
-				var p int
-
-				wgStart.Wait()
-				//fmt.Println("requester ", idx, "start")
-
+	BreakerC(
+		be,
+		ErrUnavailable,
+		func(
+			ctx context.Context,
+			group *sync.WaitGroup,
+			inStream <-chan Request[int, int],
+		) {
+			go func() {
 				for {
 					select {
 					case <-ctx.Done():
 						return
+					case req, more := <-inStream:
+						if !more {
+							return
+						}
 
-					default:
-						_, _ = requester(ctx, p)
-						//counters[idx]++
-						p++
+						select {
+						case <-ctx.Done():
+						case req.Chan <- ValErrorPair[int]{
+							V:   2*req.P + 1,
+							Err: nil,
+						}:
+						}
 					}
 				}
-			}(
-				i,
-				&wgStart,
-				&wg,
-			)
+			}()
+		},
+	)(ctx, &wg, inStream)
+
+	outC := make(chan ValErrorPair[int])
+
+	require.Eventually(t, func() bool {
+		inStream <- Request[int, int]{
+			P:    101,
+			Ctx:  ctx,
+			Chan: outC,
 		}
 
-		wgStart.Done()
-		fmt.Println("requesters started")
+		return true
+	}, time.Second, time.Millisecond)
 
-		require.Eventually(
+	require.Eventually(t, func() bool {
+		require.Equal(
 			t,
-			func() bool {
-				wg.Wait()
-				return true
+			ValErrorPair[int]{
+				V: 101*2 + 1,
 			},
-			testDuration+time.Second,
-			10*time.Millisecond,
+			<-outC,
 		)
 
-		fmt.Println("all done")
+		return true
+	}, time.Second, time.Millisecond)
 
-		//fmt.Println(counters)
+	wg.Wait()
+}
 
-		//var sum int
-		//for _, counter := range counters {
-		//	sum += counter
-		//}
-		//
-		//fmt.Println(sum)
-	}
+func Test_Blocking(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	var wg sync.WaitGroup
+
+	be := NewMockBreakerEngine(t)
+	be.
+		On("IsOpen").
+		Return(true).
+		Once()
+
+	inStream := make(chan Request[int, int])
+
+	BreakerC(
+		be,
+		ErrUnavailable,
+		func(
+			ctx context.Context,
+			group *sync.WaitGroup,
+			inStream <-chan Request[int, int],
+		) {
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case req, more := <-inStream:
+						if !more {
+							return
+						}
+
+						select {
+						case <-ctx.Done():
+						case req.Chan <- ValErrorPair[int]{
+							V:   2*req.P + 1,
+							Err: nil,
+						}:
+						}
+					}
+				}
+			}()
+		},
+	)(ctx, &wg, inStream)
+
+	outC := make(chan ValErrorPair[int])
+
+	require.Eventually(t, func() bool {
+		inStream <- Request[int, int]{
+			P:    0,
+			Ctx:  ctx,
+			Chan: outC,
+		}
+
+		return true
+	}, time.Second, time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		response := <-outC
+
+		require.Equal(
+			t,
+			ValErrorPair[int]{
+				Err: ErrUnavailable,
+			},
+			response,
+		)
+
+		return true
+	}, time.Second, time.Millisecond)
+
+	wg.Wait()
+}
+
+func Test_PassingError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+
+	be := NewMockBreakerEngine(t)
+	be.
+		On("IsOpen").
+		Return(false).
+		Once()
+	be.
+		On("ReportFailure").
+		Return().
+		Once()
+
+	inStream := make(chan Request[int, int])
+
+	BreakerC(
+		be,
+		ErrUnavailable,
+		func(
+			ctx context.Context,
+			group *sync.WaitGroup,
+			inStream <-chan Request[int, int],
+		) {
+			go func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case req, more := <-inStream:
+						if !more {
+							return
+						}
+
+						select {
+						case <-ctx.Done():
+						case req.Chan <- ValErrorPair[int]{
+							Err: ErrBadass,
+						}:
+						}
+					}
+				}
+			}()
+		},
+	)(ctx, &wg, inStream)
+
+	outC := make(chan ValErrorPair[int])
+
+	require.Eventually(t, func() bool {
+		inStream <- Request[int, int]{
+			P:    101,
+			Ctx:  ctx,
+			Chan: outC,
+		}
+
+		return true
+	}, time.Second, time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		require.Equal(
+			t,
+			ValErrorPair[int]{
+				Err: ErrBadass,
+			},
+			<-outC,
+		)
+
+		return true
+	}, time.Second, time.Millisecond)
+
+	wg.Wait()
 }
