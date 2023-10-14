@@ -1,6 +1,14 @@
 package conch
 
-import (
+type Key struct {
+	A, B uint64
+}
+
+type Hashable interface {
+	Hash() Key
+}
+
+/*import (
 	"context"
 	"sync"
 )
@@ -169,3 +177,4 @@ func (p DedupPool[R]) Purge() {
 		p2 = nil
 	}
 }
+*/

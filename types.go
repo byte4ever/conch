@@ -77,8 +77,11 @@ type (
 		inStream ...<-chan T,
 	)
 	Request[P any, R any] struct {
-		P      P
-		Return func(context.Context, ValErrorPair[R])
+		P P
+		//Return      func(context.Context, ValErrorPair[R])
+		//NakedReturn func(provider ValErrorPairProvider[R])
+		Ctx  context.Context
+		Chan chan<- ValErrorPair[R]
 	}
 	ReturnFun[R any]      func(context.Context, ValErrorPair[R])
 	RequestFunc[P, R any] func(
@@ -88,4 +91,5 @@ type (
 		R,
 		error,
 	)
+	ValErrorPairProvider[R any] func(ctx context.Context) ValErrorPair[R]
 )

@@ -72,19 +72,49 @@ func RequestConsumer[P any, R any](
 		panic(ErrNilRequestProcessingFunc)
 	}
 
-	Consumer[Request[P, R]](
-		ctx, wg,
-		func(ctx context.Context, req Request[P, R]) {
-			r, err := interceptRequest(processing)(ctx, req.P)
+	wg.Add(1)
 
-			req.Return(
-				ctx, ValErrorPair[R]{
-					V:   r,
-					Err: err,
-				},
-			)
-		}, inStream,
-	)
+	go func() {
+		defer wg.Done()
+		defer func() {
+			for r := range inStream {
+				r.Chan <- ValErrorPair[R]{
+					Err: ctx.Err(),
+				}
+			}
+		}()
+
+		fi := interceptRequest(processing)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case req, more := <-inStream:
+				if !more {
+					return
+				}
+
+				select {
+				case <-ctx.Done():
+					req.Chan <- ValErrorPair[R]{
+						Err: ctx.Err(),
+					}
+				case <-req.Ctx.Done():
+					req.Chan <- ValErrorPair[R]{
+						Err: req.Ctx.Err(),
+					}
+				default:
+					r, err := fi(req.Ctx, req.P)
+					req.Chan <- ValErrorPair[R]{
+						V:   r,
+						Err: err,
+					}
+				}
+			}
+		}
+	}()
 }
 
 func RequestConsumerC[P any, R any](

@@ -2,7 +2,7 @@ package conch
 
 import (
 	"context"
-	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -13,10 +13,9 @@ type (
 )
 
 const (
-	CircuitUndefined CircuitState = iota // UNDEFINED
-	CircuitOpen                          // OPEN
-	CircuitClosed                        // CLOSED
-	CircuitHalfOpen                      // HALF_OPEN
+	CircuitOpen     CircuitState = iota // OPEN
+	CircuitClosed                       // CLOSED
+	CircuitHalfOpen                     // HALF_OPEN
 )
 
 const ( //nolint:decorder,grouper // we want that
@@ -34,10 +33,10 @@ func circuitStateEngine(
 	func(context.Context),
 	func(context.Context),
 	func(context.Context),
-	<-chan CircuitState,
+	func() CircuitState,
 ) {
 	comChan := make(chan engineEvent)
-	stateChan := make(chan CircuitState)
+	var isDown atomic.Bool
 
 	var (
 		sharedState atomic.Uint32
@@ -47,12 +46,13 @@ func circuitStateEngine(
 
 	go func() {
 		defer close(comChan)
+		defer isDown.Store(true)
 
 		var (
-			state          CircuitState
-			failureCounter int
-			successCounter int
-			ts             time.Time
+			state              CircuitState
+			consecutiveFailure int
+			consecutiveSuccess int
+			ts                 time.Time
 		)
 
 		state = CircuitClosed
@@ -66,61 +66,46 @@ func circuitStateEngine(
 				case CircuitOpen:
 					if time.Now().After(ts) {
 						state = CircuitHalfOpen
-						failureCounter = 0
-						successCounter = 0
-
-						switch event {
-						case engineEventSuccess:
-							successCounter++
-						case engineEventFailure:
-							failureCounter++
-						}
-
+						consecutiveFailure = 0
+						consecutiveSuccess = 0
 						sharedState.Store(uint32(state))
 					}
 
 				case CircuitClosed:
 					switch event {
 					case engineEventSuccess:
-						successCounter++
+						consecutiveFailure = 0
+						consecutiveSuccess++
 
-						failureCounter = 0
 					case engineEventFailure:
-						failureCounter++
-
-						successCounter = 0
+						consecutiveSuccess = 0
+						consecutiveFailure++
 					}
 
-					if failureCounter == failuresToOpen {
+					if consecutiveFailure == failuresToOpen {
 						state = CircuitOpen
-						failureCounter = 0
-						successCounter = 0
+						consecutiveFailure = 0
+						consecutiveSuccess = 0
 						ts = time.Now().Add(halfOpenTimeout)
 
 						sharedState.Store(uint32(state))
 					}
 
 				case CircuitHalfOpen:
-					if failureCounter > 0 {
-
-					}
-
 					switch event {
 					case engineEventSuccess:
-						successCounter++
-
-						failureCounter = 0
+						consecutiveFailure = 0
+						consecutiveSuccess++
 
 					case engineEventFailure:
-						failureCounter++
-
-						successCounter = 0
+						consecutiveSuccess = 0
+						consecutiveFailure++
 					}
 
-					if failureCounter > 0 {
+					if consecutiveFailure > 0 {
 						state = CircuitOpen
-						failureCounter = 0
-						successCounter = 0
+						consecutiveFailure = 0
+						consecutiveSuccess = 0
 						ts = time.Now().Add(halfOpenTimeout)
 
 						sharedState.Store(uint32(state))
@@ -128,14 +113,13 @@ func circuitStateEngine(
 						continue
 					}
 
-					if successCounter == successToClose {
+					if consecutiveSuccess == successToClose {
 						ts = time.Time{}
-						failureCounter = 0
-						successCounter = 0
+						consecutiveFailure = 0
+						consecutiveSuccess = 0
 						state = CircuitClosed
 
 						sharedState.Store(uint32(state))
-
 						continue
 					}
 				}
@@ -143,19 +127,10 @@ func circuitStateEngine(
 		}
 	}()
 
-	go func() {
-		defer close(stateChan)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case stateChan <- CircuitState(sharedState.Load()):
-			}
-		}
-	}()
-
 	return func(fCtx context.Context) {
+			if isDown.Load() {
+				return
+			}
 			select {
 			case <-fCtx.Done():
 				return
@@ -164,6 +139,9 @@ func circuitStateEngine(
 			case comChan <- engineEventRefresh:
 			}
 		}, func(fCtx context.Context) {
+			if isDown.Load() {
+				return
+			}
 			select {
 			case <-fCtx.Done():
 				return
@@ -172,6 +150,9 @@ func circuitStateEngine(
 			case comChan <- engineEventSuccess:
 			}
 		}, func(fCtx context.Context) {
+			if isDown.Load() {
+				return
+			}
 			select {
 			case <-fCtx.Done():
 				return
@@ -179,11 +160,14 @@ func circuitStateEngine(
 				return
 			case comChan <- engineEventFailure:
 			}
-		}, stateChan
+		}, func() CircuitState {
+			return CircuitState(sharedState.Load())
+		}
 }
 
 func Breaker[P any, R any](
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	inStream <-chan Request[P, R],
 	nbFailureToOpen int,
 	nbSuccessToClose int,
@@ -194,16 +178,14 @@ func Breaker[P any, R any](
 
 	go func() {
 		defer close(outStream)
-		defer func() {
-			fmt.Println("breaker shutdown")
-		}()
-
 		refresh, success, failure, chState := circuitStateEngine(
 			ctx,
 			nbFailureToOpen,
 			nbSuccessToClose,
 			halfOpenTimeout,
 		)
+
+		chanPool := newValErrorChanPool[R](maxCapacity)
 
 		for {
 			select {
@@ -214,27 +196,46 @@ func Breaker[P any, R any](
 					return
 				}
 
-				switch <-chState {
+				switch chState() {
 				case CircuitOpen:
-					// Drop new requests
-					req.Return(ctx, ValErrorPair[R]{Err: breakerError})
+					select {
+					case <-ctx.Done():
+						return
+					case req.Chan <- ValErrorPair[R]{Err: breakerError}:
+					}
 					refresh(ctx)
 				case CircuitClosed, CircuitHalfOpen:
-					select {
-					case outStream <- Request[P, R]{
-						P: req.P,
-						Return: func(
-							ctx context.Context,
-							v ValErrorPair[R],
-						) {
+					trackedChan := chanPool.get()
+
+					wg.Add(1)
+
+					go func() {
+						defer wg.Done()
+						defer chanPool.putBack(trackedChan)
+						select {
+						case v := <-trackedChan:
 							if v.Err != nil {
 								failure(ctx)
 							} else {
 								success(ctx)
 							}
 
-							req.Return(ctx, v)
-						},
+							select {
+							case <-ctx.Done():
+								return
+							case req.Chan <- v:
+								return
+							}
+						case <-ctx.Done():
+							return
+						}
+					}()
+
+					select {
+					case outStream <- Request[P, R]{
+						P:    req.P,
+						Ctx:  req.Ctx,
+						Chan: trackedChan,
 					}:
 					case <-ctx.Done():
 						return
@@ -245,4 +246,32 @@ func Breaker[P any, R any](
 	}()
 
 	return outStream
+}
+
+func BreakerC[P, R any](
+	nbFailureToOpen int,
+	nbSuccessToClose int,
+	halfOpenTimeout time.Duration,
+	breakerError error,
+	chain ChainFunc[Request[P, R]],
+) ChainFunc[Request[P, R]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan Request[P, R],
+	) {
+		chain(
+			ctx,
+			wg,
+			Breaker[P, R](
+				ctx,
+				wg,
+				inStream,
+				nbFailureToOpen,
+				nbSuccessToClose,
+				halfOpenTimeout,
+				breakerError,
+			),
+		)
+	}
 }

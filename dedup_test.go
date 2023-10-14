@@ -1,15 +1,6 @@
 package conch
 
-import (
-	"context"
-	"fmt"
-	"sync"
-	"testing"
-	"time"
-
-	"github.com/stretchr/testify/require"
-)
-
+/*
 func Test_pushFunc(t *testing.T) {
 	var m sync.Map
 
@@ -69,3 +60,4 @@ func Test_pushFunc(t *testing.T) {
 	time.Sleep(time.Second)
 
 }
+*/

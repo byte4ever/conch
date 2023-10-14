@@ -12,6 +12,7 @@ type Cache[P, R any] interface {
 
 func CacheInterceptor[P, R any](
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	cache Cache[P, R],
 	inStream <-chan Request[P, R],
 ) <-chan Request[P, R] {
@@ -19,6 +20,8 @@ func CacheInterceptor[P, R any](
 
 	go func() {
 		defer close(outStream)
+
+		valErrorChanPool := newValErrorChanPool[R](maxCapacity)
 
 	again:
 		select {
@@ -31,29 +34,50 @@ func CacheInterceptor[P, R any](
 
 			value, found := cache.Get(ctx, req.P)
 			if found {
-				req.Return(
-					ctx,
-					ValErrorPair[R]{
-						V: value,
-					},
-				)
-
-				goto again
+				select {
+				case <-ctx.Done():
+					return
+				case req.Chan <- ValErrorPair[R]{
+					V: value,
+				}:
+					goto again
+				}
 			}
+
+			cacheChan := valErrorChanPool.get()
 
 			select {
 			case <-ctx.Done():
 				return
 
 			case outStream <- Request[P, R]{
-				P: req.P,
-				Return: func(ctx context.Context, v ValErrorPair[R]) {
-					if v.Err == nil {
-						cache.Store(ctx, req.P, v.V)
-					}
-					req.Return(ctx, v)
-				},
+				P:    req.P,
+				Ctx:  ctx,
+				Chan: cacheChan,
 			}:
+				// intercept response channel and store to cache if no error occurs
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					defer valErrorChanPool.putBack(cacheChan)
+					select {
+					case v, more := <-cacheChan:
+						if !more {
+							return
+						}
+
+						if v.Err == nil {
+							cache.Store(ctx, req.P, v.V)
+						}
+
+						select {
+						case <-req.Ctx.Done():
+							return
+						case req.Chan <- v:
+						}
+					}
+				}()
+
 				goto again
 			}
 		}
@@ -71,7 +95,7 @@ func CacheInterceptorC[P, R any](
 		wg *sync.WaitGroup,
 		inStream <-chan Request[P, R],
 	) {
-		chain(ctx, wg, CacheInterceptor(ctx, cache, inStream))
+		chain(ctx, wg, CacheInterceptor(ctx, wg, cache, inStream))
 	}
 }
 
@@ -96,12 +120,14 @@ func CacheReadInterceptor[P, R any](
 
 			value, found := cache.Get(ctx, req.P)
 			if found {
-				req.Return(
-					ctx,
-					ValErrorPair[R]{
-						V: value,
-					},
-				)
+				select {
+				case <-ctx.Done():
+					return
+				case req.Chan <- ValErrorPair[R]{
+					V:   value,
+					Err: nil,
+				}:
+				}
 
 				goto again
 			}

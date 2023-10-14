@@ -2,6 +2,7 @@
 
 package conch
 
+/*
 import "strconv"
 
 func _() {
@@ -23,3 +24,4 @@ func (i engineEvent) String() string {
 	}
 	return _engineEvent_name[_engineEvent_index[i]:_engineEvent_index[i+1]]
 }
+*/

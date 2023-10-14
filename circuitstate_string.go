@@ -2,6 +2,7 @@
 
 package conch
 
+/*
 import "strconv"
 
 func _() {
@@ -24,3 +25,4 @@ func (i CircuitState) String() string {
 	}
 	return _CircuitState_name[_CircuitState_index[i]:_CircuitState_index[i+1]]
 }
+*/

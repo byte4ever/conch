@@ -100,6 +100,8 @@ func consumer[T any](
 	go func() {
 		defer wg.Done()
 
+		fi := intercept(l, f)
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -110,7 +112,7 @@ func consumer[T any](
 					return
 				}
 
-				intercept(l, f)(ctx, e)
+				fi(ctx, e)
 			}
 		}
 	}()

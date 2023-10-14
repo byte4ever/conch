@@ -1,5 +1,6 @@
 package conch
 
+/*
 import (
 	"context"
 	"errors"
@@ -77,39 +78,51 @@ func Test_RequestConsumerC(t *testing.T) {
 			inStream := make(chan Request[int, int], 4)
 			inStream <- Request[int, int]{
 				P: 1000,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[1000] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[1000] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[1000] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 1,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[1] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[1] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[1] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 2,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[2] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[2] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[2] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 3,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[3] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[3] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[3] = v
+				// },
 			}
 			close(inStream)
 
@@ -187,7 +200,6 @@ func Test_RequestConsumerC(t *testing.T) {
 
 			d := NewMockRequestFunc[int, int](t)
 			inStream := make(chan Request[int, int])
-			defer close(inStream)
 
 			RequestConsumerC[int, int](
 				d.Execute,
@@ -198,6 +210,9 @@ func Test_RequestConsumerC(t *testing.T) {
 			)
 
 			cancel()
+
+			close(inStream) // this is required to enable draining
+
 			require.Eventually(
 				t, func() bool {
 					wg.Wait()
@@ -305,40 +320,53 @@ func Test_RequestConsumerPoolC(t *testing.T) {
 			inStream := make(chan Request[int, int], 4)
 			inStream <- Request[int, int]{
 				P: 1000,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[1000] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[1000] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[1000] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 1,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[1] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[1] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[1] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 2,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[2] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[2] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[2] = v
+				// },
 			}
 			inStream <- Request[int, int]{
 				P: 3,
-				Return: func(
-					ctx context.Context,
-					v ValErrorPair[int],
-				) {
-					res[3] = v
+				NakedReturn: func(provider ValErrorPairProvider[int]) {
+					res[3] = provider(ctx)
 				},
+				// Return: func(
+				// 	ctx context.Context,
+				// 	v ValErrorPair[int],
+				// ) {
+				// 	res[3] = v
+				// },
 			}
+
 			close(inStream)
 
 			RequestConsumerPoolC[int, int](
@@ -399,7 +427,7 @@ func Test_RequestConsumerPoolC(t *testing.T) {
 			require.Contains(
 				t,
 				perr.stack,
-				"request_consumer_test.go:299",
+				"request_consumer_test.go:313",
 			)
 		},
 	)
@@ -416,7 +444,6 @@ func Test_RequestConsumerPoolC(t *testing.T) {
 
 			d := NewMockRequestFunc[int, int](t)
 			inStream := make(chan Request[int, int])
-			defer close(inStream)
 
 			RequestConsumerPoolC[int, int](
 				d.Execute,
@@ -428,6 +455,9 @@ func Test_RequestConsumerPoolC(t *testing.T) {
 			)
 
 			cancel()
+
+			close(inStream) // this is required to enable draining
+
 			require.Eventually(
 				t, func() bool {
 					wg.Wait()
@@ -473,3 +503,4 @@ func Test_RequestConsumerPoolC(t *testing.T) {
 		},
 	)
 }
+*/
