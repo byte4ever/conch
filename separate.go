@@ -2,11 +2,12 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
 
 func Separate[V any](
 	ctx context.Context,
-	inSTream <-chan ValErrorPair[V],
+	inStream <-chan ValErrorPair[V],
 ) (<-chan V, <-chan error) {
 	outStream := make(chan V)
 	outStreamErr := make(chan error)
@@ -15,7 +16,7 @@ func Separate[V any](
 		defer close(outStream)
 		defer close(outStreamErr)
 
-		for v := range inSTream {
+		for v := range inStream {
 			if v.Err != nil {
 				select {
 				case outStreamErr <- v.Err:
@@ -37,4 +38,19 @@ func Separate[V any](
 	}()
 
 	return outStream, outStreamErr
+}
+
+func SeparateC[R any](
+	result ChainFunc[R],
+	err ChainFunc[error],
+) ChainFunc[ValErrorPair[R]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan ValErrorPair[R],
+	) {
+		r, e := Separate(ctx, inStream)
+		err(ctx, wg, e)
+		result(ctx, wg, r)
+	}
 }
