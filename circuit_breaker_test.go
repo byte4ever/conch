@@ -19,7 +19,7 @@ var (
 	ErrUnavailable = errors.New("unavailable")
 )
 
-func Test_PassingNoError(t *testing.T) {
+func Test_BreakerPassingNoError(t *testing.T) {
 	defer goleak.VerifyNone(
 		t,
 		goleak.IgnoreCurrent(),
@@ -27,8 +27,6 @@ func Test_PassingNoError(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	var wg sync.WaitGroup
 
 	be := NewMockBreakerEngine(t)
 	be.
@@ -40,72 +38,78 @@ func Test_PassingNoError(t *testing.T) {
 		Return().
 		Once()
 
-	inStream := make(chan Request[int, int])
-
-	BreakerC(
-		be,
-		ErrUnavailable,
+	scaffoldTest(
+		t,
 		func(
-			ctx context.Context,
-			group *sync.WaitGroup,
-			inStream <-chan Request[int, int],
+			t *testing.T,
+			inStream chan Request[int, int],
+			wg *sync.WaitGroup,
 		) {
-			group.Add(1)
 
-			go func() {
-				defer group.Done()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case req, more := <-inStream:
-						if !more {
-							return
-						}
+			BreakerC(
+				be,
+				ErrUnavailable,
+				func(
+					ctx context.Context,
+					group *sync.WaitGroup,
+					inStream <-chan Request[int, int],
+				) {
+					group.Add(1)
 
-						select {
-						case <-ctx.Done():
-						case req.Chan <- ValErrorPair[int]{
-							V:   2*req.P + 1,
-							Err: nil,
-						}:
+					go func() {
+						defer group.Done()
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case req, more := <-inStream:
+								if !more {
+									return
+								}
+
+								select {
+								case <-ctx.Done():
+								case req.Chan <- ValErrorPair[int]{
+									V:   2*req.P + 1,
+									Err: nil,
+								}:
+								}
+							}
 						}
-					}
+					}()
+				},
+			)(ctx, wg, inStream)
+
+			outC := make(chan ValErrorPair[int])
+
+			require.Eventually(t, func() bool {
+				inStream <- Request[int, int]{
+					P:    101,
+					Ctx:  ctx,
+					Chan: outC,
 				}
-			}()
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			require.Eventually(t, func() bool {
+				require.Equal(
+					t,
+					ValErrorPair[int]{
+						V: 101*2 + 1,
+					},
+					<-outC,
+				)
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			close(inStream)
 		},
-	)(ctx, &wg, inStream)
-
-	outC := make(chan ValErrorPair[int])
-
-	require.Eventually(t, func() bool {
-		inStream <- Request[int, int]{
-			P:    101,
-			Ctx:  ctx,
-			Chan: outC,
-		}
-
-		return true
-	}, time.Second, time.Millisecond)
-
-	require.Eventually(t, func() bool {
-		require.Equal(
-			t,
-			ValErrorPair[int]{
-				V: 101*2 + 1,
-			},
-			<-outC,
-		)
-
-		return true
-	}, time.Second, time.Millisecond)
-
-	close(inStream)
-
-	wg.Wait()
+	)
 }
 
-func Test_Blocking(t *testing.T) {
+func Test_BreakerBlocking(t *testing.T) {
 	defer goleak.VerifyNone(
 		t,
 		goleak.IgnoreCurrent(),
@@ -113,8 +117,6 @@ func Test_Blocking(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	var wg sync.WaitGroup
 
 	be := NewMockBreakerEngine(t)
 	be.
@@ -122,74 +124,79 @@ func Test_Blocking(t *testing.T) {
 		Return(true).
 		Once()
 
-	inStream := make(chan Request[int, int])
-
-	BreakerC(
-		be,
-		ErrUnavailable,
+	scaffoldTest(
+		t,
 		func(
-			ctx context.Context,
-			group *sync.WaitGroup,
-			inStream <-chan Request[int, int],
+			t *testing.T,
+			inStream chan Request[int, int],
+			wg *sync.WaitGroup,
 		) {
-			group.Add(1)
+			BreakerC(
+				be,
+				ErrUnavailable,
+				func(
+					ctx context.Context,
+					group *sync.WaitGroup,
+					inStream <-chan Request[int, int],
+				) {
+					group.Add(1)
 
-			go func() {
-				defer group.Done()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case req, more := <-inStream:
-						if !more {
-							return
-						}
+					go func() {
+						defer group.Done()
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case req, more := <-inStream:
+								if !more {
+									return
+								}
 
-						select {
-						case <-ctx.Done():
-						case req.Chan <- ValErrorPair[int]{
-							V:   2*req.P + 1,
-							Err: nil,
-						}:
+								select {
+								case <-ctx.Done():
+								case req.Chan <- ValErrorPair[int]{
+									V:   2*req.P + 1,
+									Err: nil,
+								}:
+								}
+							}
 						}
-					}
+					}()
+				},
+			)(ctx, wg, inStream)
+
+			outC := make(chan ValErrorPair[int])
+
+			require.Eventually(t, func() bool {
+				inStream <- Request[int, int]{
+					P:    0,
+					Ctx:  ctx,
+					Chan: outC,
 				}
-			}()
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			require.Eventually(t, func() bool {
+				response := <-outC
+
+				require.Equal(
+					t,
+					ValErrorPair[int]{
+						Err: ErrUnavailable,
+					},
+					response,
+				)
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			close(inStream)
 		},
-	)(ctx, &wg, inStream)
-
-	outC := make(chan ValErrorPair[int])
-
-	require.Eventually(t, func() bool {
-		inStream <- Request[int, int]{
-			P:    0,
-			Ctx:  ctx,
-			Chan: outC,
-		}
-
-		return true
-	}, time.Second, time.Millisecond)
-
-	require.Eventually(t, func() bool {
-		response := <-outC
-
-		require.Equal(
-			t,
-			ValErrorPair[int]{
-				Err: ErrUnavailable,
-			},
-			response,
-		)
-
-		return true
-	}, time.Second, time.Millisecond)
-
-	close(inStream)
-
-	wg.Wait()
+	)
 }
 
-func Test_PassingError(t *testing.T) {
+func Test_BreakerPassingError(t *testing.T) {
 	defer goleak.VerifyNone(
 		t,
 		goleak.IgnoreCurrent(),
@@ -197,8 +204,6 @@ func Test_PassingError(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	var wg sync.WaitGroup
 
 	be := NewMockBreakerEngine(t)
 	be.
@@ -210,66 +215,173 @@ func Test_PassingError(t *testing.T) {
 		Return().
 		Once()
 
-	inStream := make(chan Request[int, int])
-
-	BreakerC(
-		be,
-		ErrUnavailable,
+	scaffoldTest(
+		t,
 		func(
-			ctx context.Context,
-			group *sync.WaitGroup,
-			inStream <-chan Request[int, int],
+			t *testing.T,
+			inStream chan Request[int, int],
+			wg *sync.WaitGroup,
 		) {
-			group.Add(1)
+			BreakerC(
+				be,
+				ErrUnavailable,
+				func(
+					ctx context.Context,
+					group *sync.WaitGroup,
+					inStream <-chan Request[int, int],
+				) {
+					group.Add(1)
 
-			go func() {
-				defer group.Done()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case req, more := <-inStream:
-						if !more {
-							return
-						}
+					go func() {
+						defer group.Done()
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case req, more := <-inStream:
+								if !more {
+									return
+								}
 
-						select {
-						case <-ctx.Done():
-						case req.Chan <- ValErrorPair[int]{
-							Err: ErrBadass,
-						}:
+								select {
+								case <-ctx.Done():
+								case req.Chan <- ValErrorPair[int]{
+									Err: ErrBadass,
+								}:
+								}
+							}
 						}
-					}
+					}()
+				},
+			)(ctx, wg, inStream)
+
+			outC := make(chan ValErrorPair[int])
+
+			require.Eventually(t, func() bool {
+				inStream <- Request[int, int]{
+					P:    101,
+					Ctx:  ctx,
+					Chan: outC,
 				}
-			}()
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			require.Eventually(t, func() bool {
+				require.Equal(
+					t,
+					ValErrorPair[int]{
+						Err: ErrBadass,
+					},
+					<-outC,
+				)
+
+				return true
+			}, time.Second, time.Millisecond)
+
+			close(inStream)
 		},
-	)(ctx, &wg, inStream)
+	)
+}
 
-	outC := make(chan ValErrorPair[int])
+func Test_BreakerClosingInput(t *testing.T) {
+	defer goleak.VerifyNone(
+		t,
+		goleak.IgnoreCurrent(),
+	)
 
-	require.Eventually(t, func() bool {
-		inStream <- Request[int, int]{
-			P:    101,
-			Ctx:  ctx,
-			Chan: outC,
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-		return true
-	}, time.Second, time.Millisecond)
+	be := NewMockBreakerEngine(t)
 
-	require.Eventually(t, func() bool {
-		require.Equal(
-			t,
-			ValErrorPair[int]{
-				Err: ErrBadass,
-			},
-			<-outC,
-		)
+	scaffoldTest(
+		t,
+		func(
+			t *testing.T,
+			inStream chan Request[int, int],
+			wg *sync.WaitGroup,
+		) {
+			BreakerC(
+				be,
+				ErrUnavailable,
+				func(
+					ctx context.Context,
+					group *sync.WaitGroup,
+					inStream <-chan Request[int, int],
+				) {
+					group.Add(1)
 
-		return true
-	}, time.Second, time.Millisecond)
+					go func() {
+						defer group.Done()
 
-	close(inStream)
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case req, more := <-inStream:
+								require.False(t, more)
+								require.Equal(t, Request[int, int]{}, req)
 
-	wg.Wait()
+								return
+							}
+						}
+					}()
+				},
+			)(ctx, wg, inStream)
+
+			close(inStream)
+		},
+	)
+}
+
+func Test_BreakerCancelCtx(t *testing.T) {
+	defer goleak.VerifyNone(
+		t,
+		goleak.IgnoreCurrent(),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	be := NewMockBreakerEngine(t)
+
+	scaffoldTest(
+		t,
+		func(
+			t *testing.T,
+			inStream chan Request[int, int],
+			wg *sync.WaitGroup,
+		) {
+			BreakerC(
+				be,
+				ErrUnavailable,
+				func(
+					ctx context.Context,
+					group *sync.WaitGroup,
+					inStream <-chan Request[int, int],
+				) {
+					group.Add(1)
+
+					go func() {
+						defer group.Done()
+
+						for {
+							select {
+							case <-ctx.Done():
+								return
+							case req, more := <-inStream:
+								require.False(t, more)
+								require.Equal(t, Request[int, int]{}, req)
+
+								return
+							}
+						}
+					}()
+				},
+			)(ctx, wg, inStream)
+
+			cancel()
+		},
+	)
 }

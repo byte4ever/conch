@@ -11,67 +11,6 @@ import (
 	"go.uber.org/goleak"
 )
 
-func generator[T any](
-	ctx context.Context,
-	f func(
-		ctx context.Context,
-		n uint64,
-	) (T, bool),
-) chan T {
-	outStream := make(chan T)
-
-	go func() {
-		defer close(outStream)
-
-		var cnt uint64
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				e, more := f(ctx, cnt)
-
-				if !more {
-					return
-				}
-
-				cnt++
-
-				select {
-				case <-ctx.Done():
-					return
-				case outStream <- e:
-				}
-			}
-		}
-	}()
-
-	return outStream
-}
-
-func GeneratorProducer[T any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	f func(
-		ctx context.Context,
-		n uint64,
-	) (T, bool),
-	chain ChainFunc[T],
-) {
-	chain(ctx, wg, generator(ctx, f))
-}
-
-func BlockingSink[T any]() ChainFunc[T] {
-	return func(
-		ctx context.Context,
-		wg *sync.WaitGroup,
-		inStream <-chan T,
-	) {
-		<-ctx.Done()
-	}
-}
-
 func TestBuffer(t *testing.T) {
 	t.Parallel()
 
