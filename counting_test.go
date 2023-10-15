@@ -119,9 +119,7 @@ func TestCountingC(t *testing.T) { //nolint:maintidx //dgas
 			}
 
 			CountingC[struct{}](
-				ConsumerC(
-					mockedDoer.Execute,
-				),
+				ConsumerC(0, mockedDoer.Execute),
 			)(
 				ctx,
 				&wg,
@@ -172,9 +170,7 @@ func TestCountingC(t *testing.T) { //nolint:maintidx //dgas
 				Once()
 
 			CountingC[struct{}](
-				ConsumerC(
-					mockedDoer.Execute,
-				),
+				ConsumerC(0, mockedDoer.Execute),
 			)(
 				ctx,
 				&wg,

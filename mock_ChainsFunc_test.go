@@ -14,14 +14,14 @@ type MockChainsFunc[T interface{}] struct {
 	mock.Mock
 }
 
-// Execute provides a mock function with given fields: ctx, group, inStream
-func (_m *MockChainsFunc[T]) Execute(ctx context.Context, group *sync.WaitGroup, inStream ...<-chan T) {
+// Execute provides a mock function with given fields: ctx, wg, inStream
+func (_m *MockChainsFunc[T]) Execute(ctx context.Context, wg *sync.WaitGroup, inStream ...<-chan T) {
 	_va := make([]interface{}, len(inStream))
 	for _i := range inStream {
 		_va[_i] = inStream[_i]
 	}
 	var _ca []interface{}
-	_ca = append(_ca, ctx, group)
+	_ca = append(_ca, ctx, wg)
 	_ca = append(_ca, _va...)
 	_m.Called(_ca...)
 }

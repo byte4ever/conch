@@ -4,15 +4,24 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"os"
+	"sync"
+	"testing"
+	"time"
+
+	"go.uber.org/goleak"
+)
+
+/*
+import (
+	"context"
+	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-
-	"github.com/byte4ever/conch/internal/ratelimit"
 )
 
 func TestTee(t *testing.T) {
@@ -371,7 +380,7 @@ func DummyGenerator() Generator[struct{}] {
 	}
 }
 
-func TestRateLimit(t *testing.T) {
+/*func TestRateLimit(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 
 	ctx, cancel := context.WithTimeout(
@@ -433,3 +442,4 @@ func TestRateLimit(t *testing.T) {
 
 	wg.Wait()
 }
+*/

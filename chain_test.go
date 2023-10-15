@@ -2,7 +2,9 @@ package conch
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
@@ -19,7 +21,9 @@ func TestChain(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
-			chained := Chain(ctx, stream1, stream2)
+			var wg sync.WaitGroup
+
+			chained := Chain(ctx, &wg, stream1, stream2)
 			checkStreamContent(
 				t, chained, []string{
 					"s1-0",
@@ -28,6 +32,8 @@ func TestChain(t *testing.T) {
 					"s2-1",
 				},
 			)
+
+			wgWait(t, &wg, time.Second, time.Millisecond)
 		},
 	)
 
@@ -37,14 +43,18 @@ func TestChain(t *testing.T) {
 
 			stream1 := fakeStream("s1", 2)
 
+			var wg sync.WaitGroup
+
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			require.Panics(
 				t, func() {
-					_ = Chain(ctx, stream1, stream1)
+					_ = Chain(ctx, &wg, stream1, stream1)
 				},
 			)
+
+			wgWait(t, &wg, time.Second, time.Millisecond)
 		},
 	)
 }

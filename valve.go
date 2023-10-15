@@ -2,69 +2,79 @@ package conch
 
 import (
 	"context"
+	"sync"
 )
+
+type ValveController func(ctx context.Context) <-chan bool
 
 // Valve builds an opened valve between two streams.
 func Valve[T any](
 	ctx context.Context,
-	inStream <-chan T,
+	isOpenChan <-chan bool,
 	isOpen bool,
+	inStream <-chan T,
 ) (
-	openIt func(),
-	closeIt func(),
 	outStream <-chan T,
 ) {
+	var more bool
+
 	iOutStream := make(chan T)
-	blockingCtx, blockingCancel := context.WithCancel(ctx)
-	isOpenChan := make(chan bool)
+	vIsOpenChan := isOpenChan
+	vInputStream := inStream
+
+	if !isOpen {
+		vInputStream = nil
+	}
 
 	go func() {
 		defer close(iOutStream)
-		defer blockingCancel()
 
-	beg:
-		if isOpen {
+		for {
 			select {
-			case v, more := <-inStream:
+			case v, more := <-vInputStream:
 				if !more {
 					return
 				}
 
-			c1:
 				select {
 				case iOutStream <- v:
-					goto beg
-				case isOpen = <-isOpenChan:
-					goto c1
 				case <-ctx.Done():
 					return
 				}
 
-			case isOpen = <-isOpenChan:
-				goto beg
+			case isOpen, more = <-vIsOpenChan:
+				if !more {
+					vIsOpenChan = nil
+					vInputStream = nil
+
+					continue
+				}
+
+				if isOpen {
+					vInputStream = inStream
+				} else {
+					vInputStream = nil
+				}
+
 			case <-ctx.Done():
 				return
 			}
 		}
-
-		select {
-		case <-ctx.Done():
-			return
-		case isOpen = <-isOpenChan:
-		}
-
-		goto beg
 	}()
 
-	return func() {
-			select {
-			case isOpenChan <- true:
-			case <-blockingCtx.Done():
-			}
-		}, func() {
-			select {
-			case isOpenChan <- false:
-			case <-blockingCtx.Done():
-			}
-		}, iOutStream
+	return iOutStream
+}
+
+func ValveC[T any](
+	isOpenChan <-chan bool,
+	isOpen bool,
+	chain ChainFunc[T],
+) ChainFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chain(ctx, wg, Valve(ctx, isOpenChan, isOpen, inStream))
+	}
 }

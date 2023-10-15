@@ -294,11 +294,9 @@ func TestLab(t *testing.T) {
 					func(ctx context.Context, in string) string {
 						return fmt.Sprintf("a-%s", in)
 					},
-					ConsumerC(
-						func(ctx context.Context, t string) {
-							res = append(res, t)
-						},
-					),
+					ConsumerC(0, func(ctx context.Context, id int, t string) {
+						res = append(res, t)
+					}),
 				),
 			)...,
 		)...,

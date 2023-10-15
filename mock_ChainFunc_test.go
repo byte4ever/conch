@@ -14,9 +14,9 @@ type MockChainFunc[T interface{}] struct {
 	mock.Mock
 }
 
-// Execute provides a mock function with given fields: ctx, group, inStream
-func (_m *MockChainFunc[T]) Execute(ctx context.Context, group *sync.WaitGroup, inStream <-chan T) {
-	_m.Called(ctx, group, inStream)
+// Execute provides a mock function with given fields: ctx, wg, inStream
+func (_m *MockChainFunc[T]) Execute(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
+	_m.Called(ctx, wg, inStream)
 }
 
 type mockConstructorTestingTNewMockChainFunc interface {

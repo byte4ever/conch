@@ -22,26 +22,33 @@ func TestPathGenerator(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	conch.ProcessorPoolC(
-		64,
-		conch.GetProcessorFor(ProcessRequest),
-		conch.ConsumerC(
-			func(ctx context.Context, resp *FileHashResponse) {
-				fmt.Println(
-					resp.Path,
-					humanize.Bytes(uint64(resp.Size)),
-					// resp.Duration,
-					// hex.EncodeToString(resp.Hash),
-					// float64(resp.Size)/(resp.Duration.Seconds()*1024*1024),
-				)
-			},
+	conch.BalanceC(18,
+		conch.ProcessorsC(
+			ProcessRequest,
+			conch.FanInC(
+				conch.ConsumerC(
+					0,
+					func(
+						ctx context.Context,
+						_ int,
+						param *FileHashResponse,
+					) {
+						fmt.Println(
+							param.Path,
+							humanize.Bytes(uint64(param.Size)),
+							// resp.Duration,
+							// hex.EncodeToString(resp.Hash),
+							// float64(resp.Size)/(resp.Duration.Seconds()*1024*1024),
+						)
+					},
+				),
+			),
 		),
-	)(
-		ctx, &wg, PathGenerator(
-			ctx,
-			"/home/lmartin/Downloads",
-			crypto.SHA256,
-		),
+	)(ctx, &wg, PathGenerator(
+		ctx,
+		"/home/lmartin/Downloads",
+		crypto.SHA256,
+	),
 	)
 
 	wg.Wait()

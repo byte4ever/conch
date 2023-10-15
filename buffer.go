@@ -12,18 +12,23 @@ import (
 // wasn't buffered at all.
 func Buffer[T any](
 	ctx context.Context,
-	inStream <-chan T,
+	wg *sync.WaitGroup,
 	size int,
+	inStream <-chan T,
 ) <-chan T {
 	outStream := make(chan T, size)
 
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		defer close(outStream)
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
+
 			case item, more := <-inStream:
 				if !more {
 					return
@@ -32,6 +37,7 @@ func Buffer[T any](
 				select {
 				case <-ctx.Done():
 					return
+
 				case outStream <- item:
 				}
 			}
@@ -41,12 +47,37 @@ func Buffer[T any](
 	return outStream
 }
 
+func Buffers[T any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	size int,
+	inStreams ...<-chan T,
+) (outStreams []<-chan T) {
+	outStreams = make([]<-chan T, len(inStreams))
+
+	for i, inStream := range inStreams {
+		outStreams[i] = Buffer(ctx, wg, size, inStream)
+	}
+
+	return
+}
+
 func BufferC[T any](size int, chain ChainFunc[T]) ChainFunc[T] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
 		inStream <-chan T,
 	) {
-		chain(ctx, wg, Buffer(ctx, inStream, size))
+		chain(ctx, wg, Buffer(ctx, wg, size, inStream))
+	}
+}
+
+func BuffersC[T any](size int, chains ChainsFunc[T]) ChainsFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStreams ...<-chan T,
+	) {
+		chains(ctx, wg, Buffers(ctx, wg, size, inStreams...)...)
 	}
 }

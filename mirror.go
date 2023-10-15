@@ -7,11 +7,13 @@ import (
 
 const replicaPanicMsg = "invalid mirror replicaCount"
 
-func tee[T any](inStream <-chan T) (_, _ <-chan T) {
+func tee[T any](wg *sync.WaitGroup, inStream <-chan T) (_, _ <-chan T) {
 	outStream1 := make(chan T)
 	outStream2 := make(chan T)
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer close(outStream1)
 		defer close(outStream2)
 
@@ -32,26 +34,26 @@ func tee[T any](inStream <-chan T) (_, _ <-chan T) {
 	return outStream1, outStream2
 }
 
-func recBuildTeeTree[T any](input <-chan T, outputs []<-chan T) {
+func recBuildTeeTree[T any](wg *sync.WaitGroup, input <-chan T, outputs []<-chan T) {
 	lo := len(outputs)
 
 	if lo == 2 {
-		outputs[0], outputs[1] = tee(input)
+		outputs[0], outputs[1] = tee(wg, input)
 		return
 	}
 
 	if lo == 3 {
 		var ot <-chan T
-		outputs[0], ot = tee(input)
-		outputs[1], outputs[2] = tee(ot)
+		outputs[0], ot = tee(wg, input)
+		outputs[1], outputs[2] = tee(wg, ot)
 
 		return
 	}
 
-	o1, o2 := tee(input)
+	o1, o2 := tee(wg, input)
 	n1 := lo / 2
-	recBuildTeeTree(o1, outputs[:n1])
-	recBuildTeeTree(o2, outputs[n1:])
+	recBuildTeeTree(wg, o1, outputs[:n1])
+	recBuildTeeTree(wg, o2, outputs[n1:])
 }
 
 // MirrorHighThroughput replicate input stream to multiple output streams
@@ -66,8 +68,9 @@ func recBuildTeeTree[T any](input <-chan T, outputs []<-chan T) {
 //	outputs.
 func MirrorHighThroughput[T any](
 	ctx context.Context,
-	inStream <-chan T,
+	wg *sync.WaitGroup,
 	replicaCount int,
+	inStream <-chan T,
 ) []<-chan T {
 	if replicaCount == 0 {
 		panic(replicaPanicMsg)
@@ -82,7 +85,7 @@ func MirrorHighThroughput[T any](
 	last := ContextBreaker(ctx, inStream)
 
 	for i := 0; i < replicaCount-1; i++ {
-		outStreams[i], last = tee(last)
+		outStreams[i], last = tee(wg, last)
 	}
 
 	outStreams[len(outStreams)-1] = last
@@ -91,16 +94,11 @@ func MirrorHighThroughput[T any](
 }
 
 func MirrorHighThroughputC[T any](
-	chain ...ChainFunc[T],
+	replicas int,
+	chains ChainsFunc[T],
 ) ChainFunc[T] {
 	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
-		for idx, stream := range MirrorHighThroughput(
-			ctx,
-			inStream,
-			len(chain),
-		) {
-			chain[idx](ctx, wg, stream)
-		}
+		chains(ctx, wg, MirrorHighThroughput(ctx, wg, replicas, inStream)...)
 	}
 }
 
@@ -115,8 +113,9 @@ func MirrorHighThroughputC[T any](
 //	and outputs.
 func MirrorLowLatency[T any](
 	ctx context.Context,
-	inStream <-chan T,
+	wg *sync.WaitGroup,
 	replicaCount int,
+	inStream <-chan T,
 ) []<-chan T {
 	if replicaCount == 0 {
 		panic(replicaPanicMsg)
@@ -129,21 +128,20 @@ func MirrorLowLatency[T any](
 	inStreamBrk := ContextBreaker(ctx, inStream)
 
 	outStreams := make([]<-chan T, replicaCount)
-	recBuildTeeTree(inStreamBrk, outStreams)
+	recBuildTeeTree(wg, inStreamBrk, outStreams)
 
 	return outStreams
 }
 
 func MirrorLowLatencyC[T any](
-	chain ...ChainFunc[T],
+	replicas int,
+	chains ChainsFunc[T],
 ) ChainFunc[T] {
-	return func(ctx context.Context, wg *sync.WaitGroup, inStream <-chan T) {
-		for idx, stream := range MirrorLowLatency(
-			ctx,
-			inStream,
-			len(chain),
-		) {
-			chain[idx](ctx, wg, stream)
-		}
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream <-chan T,
+	) {
+		chains(ctx, wg, MirrorLowLatency(ctx, wg, replicas, inStream)...)
 	}
 }

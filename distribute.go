@@ -109,7 +109,10 @@ func OutC[T any](outputStream chan<- T) ChainFunc[T] {
 	}
 }
 
-func OpC[T any](insert ChainOp[T], others ...ChainFunc[T]) []ChainFunc[T] {
+func OpC[T any](
+	insert ChainOp[T],
+	others ...ChainFunc[T],
+) []ChainFunc[T] {
 	lo := len(others)
 	out := make([]ChainFunc[T], lo)
 

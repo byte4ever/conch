@@ -88,9 +88,9 @@ func TestBuffer(t *testing.T) {
 						},
 						BufferC(
 							5,
-							ConsumerC(func(ctx context.Context, id uint64) {
+							ConsumerC(0, func(ctx context.Context, id int, cnt uint64) {
 								//t.Log("consumer", id)
-								maxReached = id
+								maxReached = cnt
 							}),
 						),
 					)
@@ -145,7 +145,11 @@ func TestBuffer(t *testing.T) {
 						},
 						BufferC(
 							nbItems/3,
-							ConsumerC(func(ctx context.Context, id uint64) {
+							ConsumerC(0, func(
+								ctx context.Context,
+								id int,
+								cnt uint64,
+							) {
 								//t.Log("consumer", id)
 							}),
 						),
@@ -194,9 +198,13 @@ func TestBuffer(t *testing.T) {
 						},
 						BufferC(
 							nbItems/2,
-							ConsumerC(func(ctx context.Context, id uint64) {
-								//t.Log("consumer", id)
-								if id == nbItems/4 {
+							ConsumerC(0, func(
+								ctx context.Context,
+								id int,
+								cnt uint64,
+							) {
+								//t.Log("consumer", cnt)
+								if cnt == nbItems/4 {
 									cancel()
 								}
 							}),

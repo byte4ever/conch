@@ -14,13 +14,16 @@ type BreakerEngine interface {
 func Breaker[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	inStream <-chan Request[P, R],
 	engine BreakerEngine,
 	breakerError error,
+	inStream <-chan Request[P, R],
 ) <-chan Request[P, R] {
 	outStream := make(chan Request[P, R])
 
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		defer close(outStream)
 
 		chanPool := newValErrorChanPool[R](maxCapacity)
@@ -99,13 +102,41 @@ func BreakerC[P, R any](
 		chain(
 			ctx,
 			wg,
-			Breaker[P, R](
-				ctx,
-				wg,
-				inStream,
-				engine,
-				breakerError,
-			),
+			Breaker[P, R](ctx, wg, engine, breakerError, inStream),
+		)
+	}
+}
+
+func Breakers[P any, R any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	engine BreakerEngine,
+	breakerError error,
+	inStreams ...<-chan Request[P, R],
+) (outStreams []<-chan Request[P, R]) {
+	outStreams = make([]<-chan Request[P, R], len(inStreams))
+
+	for i, inStream := range inStreams {
+		outStreams[i] = Breaker(ctx, wg, engine, breakerError, inStream)
+	}
+
+	return
+}
+
+func BreakersC[P, R any](
+	engine BreakerEngine,
+	breakerError error,
+	chains ChainsFunc[Request[P, R]],
+) ChainsFunc[Request[P, R]] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStreams ...<-chan Request[P, R],
+	) {
+		chains(
+			ctx,
+			wg,
+			Breakers[P, R](ctx, wg, engine, breakerError, inStreams...)...,
 		)
 	}
 }

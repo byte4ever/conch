@@ -7,12 +7,16 @@ import (
 
 func Filter[T any](
 	ctx context.Context,
-	inStream <-chan T,
+	wg *sync.WaitGroup,
 	filter FilterFunc[T],
+	inStream <-chan T,
 ) <-chan T {
 	outStream := make(chan T)
 
+	wg.Add(1)
+
 	go func() {
+		defer wg.Done()
 		defer close(outStream)
 
 		for {
@@ -39,6 +43,21 @@ func Filter[T any](
 	return outStream
 }
 
+func Filters[T any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	filter FilterFunc[T],
+	inStreams ...<-chan T,
+) (outStreams []<-chan T) {
+	outStreams = make([]<-chan T, len(inStreams))
+
+	for i, inStream := range inStreams {
+		outStreams[i] = Filter(ctx, wg, filter, inStream)
+	}
+
+	return
+}
+
 func FilterC[T any](
 	filter FilterFunc[T],
 	chain ChainFunc[T],
@@ -48,6 +67,19 @@ func FilterC[T any](
 		wg *sync.WaitGroup,
 		inStream <-chan T,
 	) {
-		chain(ctx, wg, Filter(ctx, inStream, filter))
+		chain(ctx, wg, Filter(ctx, wg, filter, inStream))
+	}
+}
+
+func FiltersC[T any](
+	filter FilterFunc[T],
+	chains ChainsFunc[T],
+) ChainsFunc[T] {
+	return func(
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStreams ...<-chan T,
+	) {
+		chains(ctx, wg, Filters(ctx, wg, filter, inStreams...)...)
 	}
 }

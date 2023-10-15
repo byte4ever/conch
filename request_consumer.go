@@ -131,32 +131,25 @@ func RequestConsumerC[P any, R any](
 	}
 }
 
-func RequestConsumerPool[P any, R any](
+func RequestConsumers[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	inStream <-chan Request[P, R],
 	processing RequestFunc[P, R],
-	count int,
+	inStreams ...<-chan Request[P, R],
 ) {
-	for i := 0; i < count; i++ {
-		RequestConsumer(
-			ctx,
-			wg,
-			inStream,
-			processing,
-		)
+	for _, stream := range inStreams {
+		RequestConsumer(ctx, wg, stream, processing)
 	}
 }
 
-func RequestConsumerPoolC[P any, R any](
+func RequestConsumersC[P any, R any](
 	processing RequestFunc[P, R],
-	count int,
-) ChainFunc[Request[P, R]] {
+) ChainsFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStream <-chan Request[P, R],
+		inStreams ...<-chan Request[P, R],
 	) {
-		RequestConsumerPool(ctx, wg, inStream, processing, count)
+		RequestConsumers(ctx, wg, processing, inStreams...)
 	}
 }

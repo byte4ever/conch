@@ -54,8 +54,8 @@ type (
 	Comparable interface {
 		LessThan(other Comparable) bool
 	}
-	Generator[T any] func(context.Context) (output <-chan T, err error)
-	Doer[T any]      func(context.Context, T)
+	Generator[T any] func(ctx context.Context) (output <-chan T, err error)
+	Doer[T any]      func(ctx context.Context, id int, param T)
 	// Processor defines a function that read from a single input stream and
 	// produce elements to the resulting output stream.
 	Processor[From, To any] func(
@@ -68,12 +68,12 @@ type (
 	FilterFunc[T any] func(ctx context.Context, v T) bool
 	ChainFunc[T any]  func(
 		ctx context.Context,
-		group *sync.WaitGroup,
+		wg *sync.WaitGroup,
 		inStream <-chan T,
 	)
 	ChainsFunc[T any] func(
 		ctx context.Context,
-		group *sync.WaitGroup,
+		wg *sync.WaitGroup,
 		inStream ...<-chan T,
 	)
 	Request[P any, R any] struct {

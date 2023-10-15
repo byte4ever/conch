@@ -25,6 +25,7 @@ import (
 // context is canceled.
 func Chain[T any](
 	ctx context.Context,
+	wg *sync.WaitGroup,
 	inStream ...<-chan T,
 ) <-chan T {
 	outStream := make(chan T)
@@ -33,7 +34,9 @@ func Chain[T any](
 		panic("chain with duplicate input")
 	}
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		defer close(outStream)
 
 		for _, in := range inStream {
@@ -60,41 +63,11 @@ func Chain[T any](
 }
 
 func ChainC[T any](
-	count int,
 	chain ChainFunc[T],
-) []ChainFunc[T] {
-	var (
-		mainWg sync.WaitGroup
-		iWg    *sync.WaitGroup
-		iCtx   context.Context
-	)
-
-	r := make([]ChainFunc[T], count)
-	s := make([]<-chan T, count)
-
-	mainWg.Add(count)
-
-	for i := 0; i < count; i++ {
-		j := i
-		r[i] = func(
-			ctx context.Context, wg *sync.WaitGroup, inStream <-chan T,
-		) {
-			defer mainWg.Done()
-
-			if j == 0 {
-				// capture context and wait group
-				iCtx = ctx
-				iWg = wg
-			}
-
-			s[j] = inStream
-		}
+) ChainsFunc[T] {
+	return func(
+		ctx context.Context, wg *sync.WaitGroup, inStream ...<-chan T,
+	) {
+		chain(ctx, wg, Chain(ctx, wg, inStream...))
 	}
-
-	go func() {
-		mainWg.Wait()
-		chain(iCtx, iWg, Chain(iCtx, s...))
-	}()
-
-	return r
 }

@@ -24,7 +24,7 @@ func intercept[T any](
 		StringBufferSize  = 2048
 	)
 
-	return func(ctx context.Context, t T) {
+	return func(ctx context.Context, id int, t T) {
 		defer func() {
 			if r := recover(); r != nil {
 				var sb strings.Builder
@@ -63,7 +63,7 @@ func intercept[T any](
 			}
 		}()
 
-		f(ctx, t)
+		f(ctx, id, t)
 	}
 }
 
@@ -78,15 +78,17 @@ func intercept[T any](
 func Consumer[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
+	id int,
 	f Doer[T],
 	inStream <-chan T,
 ) {
-	consumer(ctx, wg, logger, f, inStream)
+	consumer(ctx, wg, id, logger, f, inStream)
 }
 
 func consumer[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
+	id int,
 	l Logger,
 	f Doer[T],
 	inStream <-chan T,
@@ -112,52 +114,14 @@ func consumer[T any](
 					return
 				}
 
-				fi(ctx, e)
+				fi(ctx, id, e)
 			}
 		}
 	}()
 }
 
-// ConsumerPool spawns n concurrent  consumers for the input stream.
-//
-// All of them are shut down when the input stream is closed or the context is
-// canceled and wg is used to wait for all consumers to finish when shutdown
-// condition is met.
-//
-// Panics that may occur during doer execution will be caught and
-// logged on global logger.
-func ConsumerPool[T any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	count int,
-	f Doer[T],
-	inStream <-chan T,
-) {
-	consumerPool(ctx, wg, logger, count, f, inStream)
-}
-
-func consumerPool[T any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	l Logger,
-	count int,
-	f Doer[T],
-	inStream <-chan T,
-) {
-	if count <= 0 {
-		panic(ErrInvalidConsumerPoolCount)
-	}
-
-	if f == nil {
-		panic(ErrNilConsumerPoolDoer)
-	}
-
-	for i := 0; i < count; i++ {
-		consumer(ctx, wg, l, f, inStream)
-	}
-}
-
 func ConsumerC[T any](
+	id int,
 	f Doer[T],
 ) ChainFunc[T] {
 	return func(
@@ -165,19 +129,29 @@ func ConsumerC[T any](
 		wg *sync.WaitGroup,
 		inStream <-chan T,
 	) {
-		Consumer(ctx, wg, f, inStream)
+		Consumer(ctx, wg, id, f, inStream)
 	}
 }
 
-func ConsumerPoolC[T any](
-	count int,
+func Consumers[T any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
 	f Doer[T],
-) ChainFunc[T] {
+	inStreams ...<-chan T,
+) {
+	for idx, inStream := range inStreams {
+		Consumer(ctx, wg, idx, f, inStream)
+	}
+}
+
+func ConsumersC[T any](
+	f Doer[T],
+) ChainsFunc[T] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStream <-chan T,
+		inStreams ...<-chan T,
 	) {
-		ConsumerPool(ctx, wg, count, f, inStream)
+		Consumers(ctx, wg, f, inStreams...)
 	}
 }

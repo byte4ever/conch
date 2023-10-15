@@ -13,17 +13,17 @@ type MockGenerator[T interface{}] struct {
 	mock.Mock
 }
 
-// Execute provides a mock function with given fields: _a0
-func (_m *MockGenerator[T]) Execute(_a0 context.Context) (<-chan T, error) {
-	ret := _m.Called(_a0)
+// Execute provides a mock function with given fields: ctx
+func (_m *MockGenerator[T]) Execute(ctx context.Context) (<-chan T, error) {
+	ret := _m.Called(ctx)
 
 	var r0 <-chan T
 	var r1 error
 	if rf, ok := ret.Get(0).(func(context.Context) (<-chan T, error)); ok {
-		return rf(_a0)
+		return rf(ctx)
 	}
 	if rf, ok := ret.Get(0).(func(context.Context) <-chan T); ok {
-		r0 = rf(_a0)
+		r0 = rf(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(<-chan T)
@@ -31,7 +31,7 @@ func (_m *MockGenerator[T]) Execute(_a0 context.Context) (<-chan T, error) {
 	}
 
 	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = rf(_a0)
+		r1 = rf(ctx)
 	} else {
 		r1 = ret.Error(1)
 	}

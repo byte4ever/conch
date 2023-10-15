@@ -13,9 +13,9 @@ type MockDoer[T interface{}] struct {
 	mock.Mock
 }
 
-// Execute provides a mock function with given fields: _a0, _a1
-func (_m *MockDoer[T]) Execute(_a0 context.Context, _a1 T) {
-	_m.Called(_a0, _a1)
+// Execute provides a mock function with given fields: ctx, id, param
+func (_m *MockDoer[T]) Execute(ctx context.Context, id int, param T) {
+	_m.Called(ctx, id, param)
 }
 
 type mockConstructorTestingTNewMockDoer interface {
