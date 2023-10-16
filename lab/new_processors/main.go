@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/byte4ever/conch"
+	"github.com/byte4ever/conch/internal/conch"
 )
 
 func main() {
@@ -21,15 +21,15 @@ func main() {
 
 	const outFmt = "%s-%d"
 
-	conch.BalanceC(
+	dirty.BalanceC(
 		10, //nolint:gomnd // dgas
-		conch.ProcessorsC(
+		dirty.ProcessorsC(
 			func(ctx context.Context, param string) (result string) {
 				v := k.Add(1)
 				return fmt.Sprintf(outFmt, param, v)
 			},
-			conch.FanInC(
-				conch.ConsumerC(
+			dirty.FanInC(
+				dirty.ConsumerC(
 					0,
 					func(ctx context.Context, _ int, t string) {
 						fmt.Println(t)
@@ -63,17 +63,17 @@ func main() {
 
 	k.Store(0)
 
-	conch.BufferC(
+	dirty.BufferC(
 		50, //nolint:gomnd // dgas
-		conch.BalanceC(
+		dirty.BalanceC(
 			32, //nolint:gomnd // dgas
-			conch.ProcessorsC(
+			dirty.ProcessorsC(
 				func(ctx context.Context, param string) (result string) {
 					v := k.Add(1)
 					return fmt.Sprintf(outFmt, param, v)
 				},
-				conch.FanInReducerC(3,
-					conch.ConsumersC(
+				dirty.FanInReducerC(3,
+					dirty.ConsumersC(
 						func(ctx context.Context, _ int, t string) {
 							fmt.Println(t)
 						},

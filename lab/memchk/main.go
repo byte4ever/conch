@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/byte4ever/conch"
+	"github.com/byte4ever/conch/internal/conch"
 )
 
 var (
@@ -35,10 +35,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	requester := conch.RequesterC(
+	requester := dirty.RequesterC(
 		ctx,
 		&wg,
-		conch.RequestConsumerC(
+		dirty.RequestConsumerC(
 			doit,
 		),
 	)

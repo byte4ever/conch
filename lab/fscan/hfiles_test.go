@@ -9,8 +9,6 @@ import (
 
 	"github.com/dustin/go-humanize"
 	"go.uber.org/goleak"
-
-	"github.com/byte4ever/conch"
 )
 
 func TestPathGenerator(t *testing.T) {
@@ -22,11 +20,11 @@ func TestPathGenerator(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	conch.BalanceC(18,
-		conch.ProcessorsC(
+	dirty.BalanceC(18,
+		dirty.ProcessorsC(
 			ProcessRequest,
-			conch.FanInC(
-				conch.ConsumerC(
+			dirty.FanInC(
+				dirty.ConsumerC(
 					0,
 					func(
 						ctx context.Context,
