@@ -28,9 +28,18 @@ func multiplex[T any](
 	}
 }
 
-// Multiplex multiplexes n input streams to count output streams. When count is 1
-// it acts as a classic fan in operator. It panics when no input streams are
-// provided or count is inferior or equal to 0.
+// Multiplex multiplexes one or more input streams into one or more output
+// streams.
+//
+// Output streams is closed when all input stream are closed or context
+// canceled.Function will panic if no input stream are provided or count is less
+// or equal to zero.
+//
+// As for all *Multiplex function. It can be used for both fan-in and fan-out:
+//   - For fan-in multiplex multiple input streams to a single output stream
+//     (count=1).
+//   - For fan-out multiplex a single input stream to multiple outputStreams
+//     (count>=1).
 func Multiplex[T any](
 	ctx context.Context,
 	count int,
