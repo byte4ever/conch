@@ -112,3 +112,10 @@ type (
 
 	ValErrorPairProvider[R any] func(ctx context.Context) ValErrorPair[R]
 )
+
+func ToValError[V any](v V, err error) ValErrorPair[V] {
+	return ValErrorPair[V]{
+		V:   v,
+		Err: err,
+	}
+}

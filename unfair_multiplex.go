@@ -33,83 +33,77 @@ func unfairMerge[T any](
 
 		low, high := lowPrioInStream, highPrioInStream
 
-		for {
-			switch {
-			case low == nil && high == nil:
-				// both of them are closed so closeMe the output stream
+	both:
+		select {
+		// we try higher prio stream first
+		case t, more := <-high:
+			if !more {
+				goto onlyLow
+			}
+			select {
+			case multiplexedOutStream <- t:
+			case <-ctx.Done():
 				return
-
-			case low == nil:
-				// low prio stream is closed, so we use high prio stream only
+			}
+		default:
+			// otherwise we try both of them
+			select {
+			case <-ctx.Done():
+				return
+			case t, more := <-high:
+				if !more {
+					goto onlyLow
+				}
 				select {
-				case t, more := <-high:
-					if !more {
-						high = nil
-						continue
-					}
-					select {
-					case multiplexedOutStream <- t:
-					case <-ctx.Done():
-						return
-					}
+				case multiplexedOutStream <- t:
+				case <-ctx.Done():
+					return
 				}
 
-			case high == nil:
-				// high prio stream is closed, so we use low prio stream only
-				select {
-				case t, more := <-low:
-					if !more {
-						low = nil
-						continue
-					}
-					select {
-					case multiplexedOutStream <- t:
-					case <-ctx.Done():
-						return
-					}
+			case t, more := <-low:
+				if !more {
+					goto onlyHigh
 				}
-			default:
 				select {
-				// we try higher prio stream first
-				case t, more := <-high:
-					if !more {
-						high = nil
-						continue
-					}
-					select {
-					case multiplexedOutStream <- t:
-					case <-ctx.Done():
-						return
-					}
-				default:
-					// otherwise we try both of them
-					select {
-					case <-ctx.Done():
-						return
-					case t, more := <-high:
-						if !more {
-							high = nil
-							continue
-						}
-						select {
-						case multiplexedOutStream <- t:
-						case <-ctx.Done():
-							return
-						}
-					case t, more := <-low:
-						if !more {
-							low = nil
-							continue
-						}
-						select {
-						case multiplexedOutStream <- t:
-						case <-ctx.Done():
-							return
-						}
-					}
+				case multiplexedOutStream <- t:
+				case <-ctx.Done():
+					return
 				}
 			}
 		}
+
+		goto both
+
+	onlyHigh:
+		select {
+		case t, more := <-high:
+			if !more {
+				return
+			}
+			select {
+			case multiplexedOutStream <- t:
+			case <-ctx.Done():
+				return
+			}
+		}
+
+		goto onlyHigh
+
+	onlyLow:
+		select {
+		// we try lower prio stream first
+		case t, more := <-low:
+			if !more {
+				return
+			}
+			select {
+			case multiplexedOutStream <- t:
+			case <-ctx.Done():
+				return
+			}
+		}
+
+		goto onlyLow
 	}()
 
 	return multiplexedOutStream

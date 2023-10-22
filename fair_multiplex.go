@@ -34,15 +34,17 @@ func fairMerge[T any](
 		i1, i2 := inStream1, inStream2
 
 		for {
-			if i1 == nil && i2 == nil {
-				return
-			}
 			select {
 			case <-ctx.Done():
 				return
 			case t, more := <-i1:
 				if !more {
 					i1 = nil
+
+					if i2 == nil {
+						return
+					}
+
 					continue
 				}
 
@@ -55,6 +57,11 @@ func fairMerge[T any](
 			case t, more := <-inStream2:
 				if !more {
 					i2 = nil
+
+					if i1 == nil {
+						return
+					}
+
 					continue
 				}
 

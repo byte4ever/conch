@@ -239,7 +239,7 @@ func TestUnfairMultiplexC(t *testing.T) {
 
 				var wg sync.WaitGroup
 
-				const count = 400
+				const count = 4000
 
 				outCount := 1 + rand.Intn(7)
 				inCount := 1 + rand.Intn(7)
@@ -340,6 +340,54 @@ func TestUnfairMultiplexC(t *testing.T) {
 					)
 				},
 			)
+		},
+	)
+}
+
+func Test_unfairMerge(t *testing.T) {
+	t.Run(
+		"high is consumed first", func(t *testing.T) {
+			defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
+
+			ctx, cancel := context.WithTimeout(
+				context.Background(),
+				2*time.Second,
+			)
+			defer cancel()
+
+			var wg sync.WaitGroup
+
+			high := make(chan int, 10)
+			for i := 0; i < 10; i++ {
+				high <- i
+			}
+
+			low := make(chan int, 10)
+			for i := 10; i < 20; i++ {
+				low <- i
+			}
+
+			out := unfairMerge(ctx, &wg, low, high)
+
+			var res []int
+
+			for i := 0; i < 20; i++ {
+				require.Eventually(
+					t,
+					func() bool {
+						res = append(res, <-out)
+						return true
+					},
+					time.Second,
+					time.Millisecond,
+				)
+			}
+
+			require.IsIncreasing(t, res)
+
+			cancel()
+			wgWait(t, &wg, time.Second, time.Millisecond)
+
 		},
 	)
 }

@@ -1,6 +1,7 @@
 package conch
 
 import (
+	"errors"
 	"math/big"
 	"testing"
 
@@ -70,3 +71,5 @@ func Test_comWithRep(t *testing.T) {
 	require.Equal(t, uint64(220), combWithRep(10, 3).Uint64())
 	require.Equal(t, uint64(13037895), combWithRep(17, 11).Uint64())
 }
+
+var ErrMocked = errors.New("mocked")
