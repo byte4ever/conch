@@ -30,7 +30,7 @@ func Dedup2[P Hashable2, R any](
 
 		var m sync.Map
 
-		valErrorChanPool := newValErrorChanPool[R](maxCapacity)
+		valErrorChanPool := conch.newValErrorChanPool[R](maxCapacity)
 		trackerPool := newTrackerPool[R](maxCapacity)
 
 	again:
@@ -81,7 +81,7 @@ func Dedup2C[P Hashable2, R any](
 
 func replicateReturnStream[R any](
 	tPool trackerPool[R],
-	valErrorChanPool valErrorChanPool[R],
+	valErrorChanPool conch.valErrorChanPool[R],
 	key Key2,
 	sMap *sync.Map,
 	returnStream chan<- dirty.ValErrorPair[R],

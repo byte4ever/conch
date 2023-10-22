@@ -28,7 +28,7 @@ func Breaker[P any, R any](
 		defer wg.Done()
 		defer close(outStream)
 
-		chanPool := newValErrorChanPool[R](maxCapacity)
+		chanPool := conch.newValErrorChanPool[R](maxCapacity)
 
 		for {
 			select {

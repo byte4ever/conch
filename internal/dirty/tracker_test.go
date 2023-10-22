@@ -15,7 +15,7 @@ import (
 func Test_tracker(t *testing.T) {
 	var m sync.Map
 
-	pool := newValErrorChanPool[int](10)
+	pool := conch.newValErrorChanPool[int](10)
 	trackerPool := newTrackerPool[int](10)
 
 	const testCnt = 1

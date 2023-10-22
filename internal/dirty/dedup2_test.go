@@ -28,7 +28,7 @@ func Test_replicateReturnStream(t *testing.T) {
 	)
 
 	tPool := newTrackerPool[int](1000)
-	vePool := newValErrorChanPool[int](1000)
+	vePool := conch.newValErrorChanPool[int](1000)
 
 	channels := make([]chan dirty.ValErrorPair[int], nbCallers)
 

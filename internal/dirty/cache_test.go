@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"
-
-	"github.com/byte4ever/conch"
 )
 
 type PP uint64

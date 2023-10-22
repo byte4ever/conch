@@ -49,7 +49,7 @@ func (t *tracker[R]) copyFromNewReturnStream(
 	outChan chan dirty.ValErrorPair[R],
 	key Key2,
 	m *sync.Map,
-	pool valErrorChanPool[R],
+	pool conch.valErrorChanPool[R],
 ) {
 	t.val = <-outChan
 	pool.putBack(outChan)

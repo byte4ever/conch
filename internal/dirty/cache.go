@@ -26,7 +26,7 @@ func CacheWriteInterceptor[P, R any](
 		defer wg.Done()
 		defer close(outStream)
 
-		valErrorChanPool := newValErrorChanPool[R](maxCapacity)
+		valErrorChanPool := conch.newValErrorChanPool[R](maxCapacity)
 
 	again:
 		select {
