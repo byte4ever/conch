@@ -13,7 +13,7 @@ var (
 	ErrNilRequestProcessingFunc = errors.New("nil request processing func")
 )
 
-func interceptPanic[P, R any](
+func interceptPanic82763487263[P, R any](
 	f RequestFunc[P, R],
 ) RequestFunc[P, R] {
 	const (
@@ -37,8 +37,11 @@ func interceptPanic[P, R any](
 					file, l := f.FileLine(pc)
 					name := f.Name()
 
-					if strings.Contains(name, "conch.interceptPanic[...]") {
-						break
+					if strings.Contains(
+						name,
+						".interceptPanic82763487263[...]",
+					) {
+						continue
 					}
 
 					sb.WriteString(name)
@@ -100,18 +103,14 @@ func RequestConsumer[P any, R any](
 						Err: ctx.Err(),
 					}
 
-				case <-req.Ctx.Done():
-					req.Chan <- ValErrorPair[R]{
-						Err: req.Ctx.Err(),
-					}
-
 				default:
 					req.Chan <- ToValError(
-						interceptPanic(processing)(
+						interceptPanic82763487263(processing)(
 							req.Ctx,
 							req.P,
 						),
 					)
+					runtime.Gosched()
 				}
 			}
 		}
