@@ -111,6 +111,14 @@ type (
 	)
 
 	ValErrorPairProvider[R any] func(ctx context.Context) ValErrorPair[R]
+
+	Key struct {
+		A, B uint64
+	}
+
+	Hashable interface {
+		Hash() Key
+	}
 )
 
 func ToValError[V any](v V, err error) ValErrorPair[V] {

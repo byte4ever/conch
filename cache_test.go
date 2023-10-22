@@ -1,4 +1,4 @@
-package dirty
+package conch
 
 import (
 	"context"
@@ -36,7 +36,7 @@ func TestCacheInterceptorC(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cacheMock := dirty.NewMockCache[PP, uint64](t)
+	cacheMock := NewMockCache[PP, uint64](t)
 
 	cacheMock.
 		On(
@@ -77,7 +77,7 @@ func TestCacheInterceptorC(t *testing.T) {
 			false,
 		)
 
-	requesterFunc := dirty.NewMockRequestFunc[PP, uint64](t)
+	requesterFunc := NewMockRequestFunc[PP, uint64](t)
 	requesterFunc.
 		On(
 			"Execute",
@@ -101,11 +101,11 @@ func TestCacheInterceptorC(t *testing.T) {
 	requester := RequesterC(
 		ctx,
 		&wg,
-		CacheReadInterceptorC[PP, uint64](
+		CacheReadInterceptorsC[PP, uint64](
 			cacheMock,
-			CacheWriteInterceptorC[PP, uint64](
+			CacheWriteInterceptorsC[PP, uint64](
 				cacheMock,
-				RequestConsumerC(
+				RequestConsumersC(
 					requesterFunc.Execute,
 				),
 			),
@@ -140,7 +140,7 @@ func TestCacheInterceptorsC(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	cacheMock := dirty.NewMockCache[PP, uint64](t)
+	cacheMock := NewMockCache[PP, uint64](t)
 
 	cacheMock.
 		On(
@@ -181,7 +181,7 @@ func TestCacheInterceptorsC(t *testing.T) {
 			false,
 		)
 
-	requesterFunc := dirty.NewMockRequestFunc[PP, uint64](t)
+	requesterFunc := NewMockRequestFunc[PP, uint64](t)
 	requesterFunc.
 		On(
 			"Execute",
@@ -205,7 +205,8 @@ func TestCacheInterceptorsC(t *testing.T) {
 	requester := RequesterC(
 		ctx,
 		&wg,
-		BalanceC(10,
+		MultiplexC(
+			10,
 			CacheReadInterceptorsC[PP, uint64](
 				cacheMock,
 				CacheWriteInterceptorsC[PP, uint64](

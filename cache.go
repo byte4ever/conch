@@ -1,10 +1,8 @@
-package dirty
+package conch
 
 import (
 	"context"
 	"sync"
-
-	"github.com/byte4ever/conch"
 )
 
 type Cache[P, R any] interface {
@@ -16,9 +14,9 @@ func CacheWriteInterceptor[P, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
-	inStream <-chan dirty.Request[P, R],
-) <-chan dirty.Request[P, R] {
-	outStream := make(chan dirty.Request[P, R])
+	inStream <-chan Request[P, R],
+) <-chan Request[P, R] {
+	outStream := make(chan Request[P, R])
 
 	wg.Add(1)
 
@@ -26,7 +24,7 @@ func CacheWriteInterceptor[P, R any](
 		defer wg.Done()
 		defer close(outStream)
 
-		valErrorChanPool := conch.newValErrorChanPool[R](maxCapacity)
+		valErrorChanPool := newValErrorChanPool[R](100)
 
 	again:
 		select {
@@ -43,7 +41,7 @@ func CacheWriteInterceptor[P, R any](
 			case <-ctx.Done():
 				return
 
-			case outStream <- dirty.Request[P, R]{
+			case outStream <- Request[P, R]{
 				P:    req.P,
 				Ctx:  ctx,
 				Chan: cacheChan,
@@ -83,9 +81,9 @@ func CacheWriteInterceptors[P, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
-	inStreams ...<-chan dirty.Request[P, R],
-) (outStreams []<-chan dirty.Request[P, R]) {
-	outStreams = make([]<-chan dirty.Request[P, R], len(inStreams))
+	inStreams ...<-chan Request[P, R],
+) (outStreams []<-chan Request[P, R]) {
+	outStreams = make([]<-chan Request[P, R], len(inStreams))
 
 	for i, inStream := range inStreams {
 		outStreams[i] = CacheWriteInterceptor(
@@ -98,12 +96,12 @@ func CacheWriteInterceptors[P, R any](
 
 func CacheWriteInterceptorC[P, R any](
 	cache Cache[P, R],
-	chain dirty.ChainFunc[dirty.Request[P, R]],
-) dirty.ChainFunc[dirty.Request[P, R]] {
+	chain ChainFunc[Request[P, R]],
+) ChainFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStream <-chan dirty.Request[P, R],
+		inStream <-chan Request[P, R],
 	) {
 		chain(ctx, wg, CacheWriteInterceptor(ctx, wg, cache, inStream))
 	}
@@ -111,12 +109,12 @@ func CacheWriteInterceptorC[P, R any](
 
 func CacheWriteInterceptorsC[P, R any](
 	cache Cache[P, R],
-	chains dirty.ChainsFunc[dirty.Request[P, R]],
-) dirty.ChainsFunc[dirty.Request[P, R]] {
+	chains ChainsFunc[Request[P, R]],
+) ChainsFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStreams ...<-chan dirty.Request[P, R],
+		inStreams ...<-chan Request[P, R],
 	) {
 		chains(ctx, wg, CacheWriteInterceptors(ctx, wg, cache, inStreams...)...)
 	}
@@ -126,9 +124,9 @@ func CacheReadInterceptor[P, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
-	inStream <-chan dirty.Request[P, R],
-) <-chan dirty.Request[P, R] {
-	outStream := make(chan dirty.Request[P, R])
+	inStream <-chan Request[P, R],
+) <-chan Request[P, R] {
+	outStream := make(chan Request[P, R])
 
 	wg.Add(1)
 
@@ -150,7 +148,7 @@ func CacheReadInterceptor[P, R any](
 				select {
 				case <-ctx.Done():
 					return
-				case req.Chan <- dirty.ValErrorPair[R]{
+				case req.Chan <- ValErrorPair[R]{
 					V:   value,
 					Err: nil,
 				}:
@@ -176,9 +174,9 @@ func CacheReadInterceptors[P, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
-	inStreams ...<-chan dirty.Request[P, R],
-) (outStreams []<-chan dirty.Request[P, R]) {
-	outStreams = make([]<-chan dirty.Request[P, R], len(inStreams))
+	inStreams ...<-chan Request[P, R],
+) (outStreams []<-chan Request[P, R]) {
+	outStreams = make([]<-chan Request[P, R], len(inStreams))
 
 	for i, inStream := range inStreams {
 		outStreams[i] = CacheReadInterceptor(ctx, wg, cache, inStream)
@@ -189,12 +187,12 @@ func CacheReadInterceptors[P, R any](
 
 func CacheReadInterceptorC[P, R any](
 	cache Cache[P, R],
-	chain dirty.ChainFunc[dirty.Request[P, R]],
-) dirty.ChainFunc[dirty.Request[P, R]] {
+	chain ChainFunc[Request[P, R]],
+) ChainFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStream <-chan dirty.Request[P, R],
+		inStream <-chan Request[P, R],
 	) {
 		chain(ctx, wg, CacheReadInterceptor(ctx, wg, cache, inStream))
 	}
@@ -202,12 +200,12 @@ func CacheReadInterceptorC[P, R any](
 
 func CacheReadInterceptorsC[P, R any](
 	cache Cache[P, R],
-	chains dirty.ChainsFunc[dirty.Request[P, R]],
-) dirty.ChainsFunc[dirty.Request[P, R]] {
+	chains ChainsFunc[Request[P, R]],
+) ChainsFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,
 		wg *sync.WaitGroup,
-		inStream ...<-chan dirty.Request[P, R],
+		inStream ...<-chan Request[P, R],
 	) {
 		chains(ctx, wg, CacheReadInterceptors(ctx, wg, cache, inStream...)...)
 	}
