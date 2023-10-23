@@ -119,7 +119,16 @@ type (
 	Hashable interface {
 		Hash() Key
 	}
+
+	Cache[P Hashable, R any] interface {
+		Get(ctx context.Context, key P) (R, bool)
+		Store(ctx context.Context, key P, value R)
+	}
 )
+
+func (k Key) Values() (uint64, uint64) {
+	return k.A, k.B
+}
 
 func ToValError[V any](v V, err error) ValErrorPair[V] {
 	return ValErrorPair[V]{

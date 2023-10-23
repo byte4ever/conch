@@ -27,7 +27,7 @@ func Requester[P, R any](
 		}
 	}()
 
-	chanPool := newValErrorChanPool[R](100)
+	chanPool := newValErrorChanPool[R](1000)
 
 	return func(
 			innerCtx context.Context,

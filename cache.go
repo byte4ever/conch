@@ -5,12 +5,7 @@ import (
 	"sync"
 )
 
-type Cache[P, R any] interface {
-	Get(ctx context.Context, key P) (R, bool)
-	Store(ctx context.Context, key P, value R)
-}
-
-func CacheWriteInterceptor[P, R any](
+func CacheWriteInterceptor[P Hashable, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
@@ -22,54 +17,72 @@ func CacheWriteInterceptor[P, R any](
 
 	go func() {
 		defer wg.Done()
+		defer func() {
+			for r := range inStream {
+				r.Chan <- ValErrorPair[R]{
+					Err: ctx.Err(),
+				}
+			}
+		}()
 		defer close(outStream)
 
-		valErrorChanPool := newValErrorChanPool[R](100)
+		valErrorChanPool := newValErrorChanPool[R](1000)
 
-	again:
-		select {
-		case <-ctx.Done():
-			return
-		case req, more := <-inStream:
-			if !more {
-				return
-			}
-
-			cacheChan := valErrorChanPool.get()
-
+		for {
 			select {
 			case <-ctx.Done():
 				return
 
-			case outStream <- Request[P, R]{
-				P:    req.P,
-				Ctx:  ctx,
-				Chan: cacheChan,
-			}:
-				// intercept response channel and store to cache if no error occurs
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					defer valErrorChanPool.putBack(cacheChan)
-					select {
-					case v, more := <-cacheChan:
-						if !more {
-							return
-						}
+			case req, more := <-inStream:
+				if !more {
+					return
+				}
 
-						if v.Err == nil {
-							cache.Store(ctx, req.P, v.V)
-						}
+				cacheChan := valErrorChanPool.get()
+				reqChan := req.Chan
+
+				req.Chan = cacheChan
+
+				select {
+				case <-ctx.Done():
+					reqChan <- ValErrorPair[R]{
+						Err: ctx.Err(),
+					}
+
+				case outStream <- req:
+					// intercept response channel and store to cache if no error
+					// occurs
+					wg.Add(1)
+
+					go func() {
+						defer wg.Done()
+						defer valErrorChanPool.putBack(cacheChan)
 
 						select {
-						case <-req.Ctx.Done():
-							return
-						case req.Chan <- v:
-						}
-					}
-				}()
+						case <-ctx.Done():
+							reqChan <- ValErrorPair[R]{
+								Err: ctx.Err(),
+							}
 
-				goto again
+						case v, more := <-cacheChan:
+							if !more {
+								return
+							}
+
+							if v.Err == nil {
+								cache.Store(ctx, req.P, v.V)
+							}
+
+							select {
+							case <-ctx.Done():
+								reqChan <- ValErrorPair[R]{
+									Err: ctx.Err(),
+								}
+							case reqChan <- v:
+							}
+						}
+					}()
+				}
 			}
 		}
 	}()
@@ -77,7 +90,7 @@ func CacheWriteInterceptor[P, R any](
 	return outStream
 }
 
-func CacheWriteInterceptors[P, R any](
+func CacheWriteInterceptors[P Hashable, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
@@ -94,7 +107,7 @@ func CacheWriteInterceptors[P, R any](
 	return
 }
 
-func CacheWriteInterceptorC[P, R any](
+func CacheWriteInterceptorC[P Hashable, R any](
 	cache Cache[P, R],
 	chain ChainFunc[Request[P, R]],
 ) ChainFunc[Request[P, R]] {
@@ -107,7 +120,7 @@ func CacheWriteInterceptorC[P, R any](
 	}
 }
 
-func CacheWriteInterceptorsC[P, R any](
+func CacheWriteInterceptorsC[P Hashable, R any](
 	cache Cache[P, R],
 	chains ChainsFunc[Request[P, R]],
 ) ChainsFunc[Request[P, R]] {
@@ -120,7 +133,7 @@ func CacheWriteInterceptorsC[P, R any](
 	}
 }
 
-func CacheReadInterceptor[P, R any](
+func CacheReadInterceptor[P Hashable, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
@@ -132,37 +145,40 @@ func CacheReadInterceptor[P, R any](
 
 	go func() {
 		defer wg.Done()
+		defer func() {
+			for r := range inStream {
+				r.Chan <- ValErrorPair[R]{
+					Err: ctx.Err(),
+				}
+			}
+		}()
 		defer close(outStream)
 
-	again:
-		select {
-		case <-ctx.Done():
-			return
-		case req, more := <-inStream:
-			if !more {
-				return
-			}
-
-			value, found := cache.Get(ctx, req.P)
-			if found {
-				select {
-				case <-ctx.Done():
-					return
-				case req.Chan <- ValErrorPair[R]{
-					V:   value,
-					Err: nil,
-				}:
-				}
-
-				goto again
-			}
-
+		for {
 			select {
 			case <-ctx.Done():
 				return
+			case req, more := <-inStream:
+				if !more {
+					return
+				}
 
-			case outStream <- req:
-				goto again
+				if value, found := cache.Get(ctx, req.P); found {
+					select {
+					case <-ctx.Done():
+						return
+					case req.Chan <- ValErrorPair[R]{
+						V: value,
+					}:
+					}
+				} else {
+					select {
+					case <-ctx.Done():
+						return
+
+					case outStream <- req:
+					}
+				}
 			}
 		}
 	}()
@@ -170,7 +186,7 @@ func CacheReadInterceptor[P, R any](
 	return outStream
 }
 
-func CacheReadInterceptors[P, R any](
+func CacheReadInterceptors[P Hashable, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	cache Cache[P, R],
@@ -185,7 +201,7 @@ func CacheReadInterceptors[P, R any](
 	return
 }
 
-func CacheReadInterceptorC[P, R any](
+func CacheReadInterceptorC[P Hashable, R any](
 	cache Cache[P, R],
 	chain ChainFunc[Request[P, R]],
 ) ChainFunc[Request[P, R]] {
@@ -198,7 +214,7 @@ func CacheReadInterceptorC[P, R any](
 	}
 }
 
-func CacheReadInterceptorsC[P, R any](
+func CacheReadInterceptorsC[P Hashable, R any](
 	cache Cache[P, R],
 	chains ChainsFunc[Request[P, R]],
 ) ChainsFunc[Request[P, R]] {

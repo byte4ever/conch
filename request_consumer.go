@@ -110,7 +110,6 @@ func RequestConsumer[P any, R any](
 							req.P,
 						),
 					)
-					runtime.Gosched()
 				}
 			}
 		}
