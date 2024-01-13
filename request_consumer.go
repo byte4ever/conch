@@ -14,14 +14,14 @@ var (
 )
 
 func interceptPanic82763487263[P, R any](
-	f RequestFunc[P, R],
-) RequestFunc[P, R] {
+	f RequestProcessingFunc[P, R],
+) RequestProcessingFunc[P, R] {
 	const (
 		MaxCallerStackSize = 128
 		StringBufferSize   = 2048
 	)
 
-	return func(ctx context.Context, p P) (res R, err error) {
+	return func(ctx context.Context, id int, p P) (res R, err error) {
 		defer func() {
 			if r := recover(); r != nil {
 				var sb strings.Builder
@@ -61,15 +61,16 @@ func interceptPanic82763487263[P, R any](
 			}
 		}()
 
-		return f(ctx, p)
+		return f(ctx, id, p)
 	}
 }
 
 func RequestConsumer[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
+	idx int,
 	inStream <-chan Request[P, R],
-	processing RequestFunc[P, R],
+	processing RequestProcessingFunc[P, R],
 ) {
 	if processing == nil {
 		panic(ErrNilRequestProcessingFunc)
@@ -107,6 +108,7 @@ func RequestConsumer[P any, R any](
 					req.Chan <- ToValError(
 						interceptPanic82763487263(processing)(
 							req.Ctx,
+							idx,
 							req.P,
 						),
 					)
@@ -119,16 +121,16 @@ func RequestConsumer[P any, R any](
 func RequestConsumers[P any, R any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
-	processing RequestFunc[P, R],
+	processing RequestProcessingFunc[P, R],
 	inStreams ...<-chan Request[P, R],
 ) {
-	for _, stream := range inStreams {
-		RequestConsumer(ctx, wg, stream, processing)
+	for idx, stream := range inStreams {
+		RequestConsumer(ctx, wg, idx, stream, processing)
 	}
 }
 
 func RequestConsumersC[P any, R any](
-	processing RequestFunc[P, R],
+	processing RequestProcessingFunc[P, R],
 ) ChainsFunc[Request[P, R]] {
 	return func(
 		ctx context.Context,

@@ -1,0 +1,10 @@
+---
+packages:
+  github.com/byte4ever/conch:
+    config:
+      inpackage: true
+      with-expecter: true
+      recursive: false
+      all: true
+      filename: "mock_{{.InterfaceName}}_test.go"
+      dir: "."

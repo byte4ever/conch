@@ -14,8 +14,8 @@ func RistrettoKeyToHash(key interface{}) (uint64, uint64) {
 }
 
 type RistrettoWrapper[P conch.Hashable, R interface{}] struct {
-	*ristretto.Cache
-	ttl time.Duration
+	Cache *ristretto.Cache
+	ttl   time.Duration
 }
 
 func WrapRistretto[P conch.Hashable, R interface{}](
@@ -29,7 +29,7 @@ func WrapRistretto[P conch.Hashable, R interface{}](
 }
 
 func (w *RistrettoWrapper[P, R]) Get(
-	_ context.Context,
+	ctx context.Context,
 	key P,
 ) (R, bool) {
 	var zeroR R

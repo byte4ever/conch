@@ -16,9 +16,15 @@ import (
 func Test_interceptPanic(t *testing.T) {
 	t.Run(
 		"when ok", func(t *testing.T) {
-			v, err := interceptPanic82763487263(func(ctx context.Context, p int) (int, error) {
-				return p*13 + 1, nil
-			})(context.Background(), 100)
+			v, err := interceptPanic82763487263(
+				func(
+					ctx context.Context,
+					_ int,
+					p int,
+				) (int, error) {
+					return p*13 + 1, nil
+				},
+			)(context.Background(), 0, 100)
 
 			require.NoError(t, err)
 			require.Equal(t, 1301, v)
@@ -27,9 +33,15 @@ func Test_interceptPanic(t *testing.T) {
 
 	t.Run(
 		"when error", func(t *testing.T) {
-			v, err := interceptPanic82763487263(func(ctx context.Context, p int) (int, error) {
-				return 0, ErrMocked
-			})(context.Background(), 100)
+			v, err := interceptPanic82763487263(
+				func(
+					ctx context.Context,
+					_ int,
+					p int,
+				) (int, error) {
+					return 0, ErrMocked
+				},
+			)(context.Background(), 0, 100)
 
 			require.ErrorIs(t, err, ErrMocked)
 			require.Zero(t, v)
@@ -41,6 +53,7 @@ func Test_interceptPanic(t *testing.T) {
 			v, err := interceptPanic82763487263(
 				func(
 					ctx context.Context,
+					_ int,
 					p int,
 				) (
 					int,
@@ -51,6 +64,7 @@ func Test_interceptPanic(t *testing.T) {
 				},
 			)(
 				context.Background(),
+				0,
 				100,
 			)
 
@@ -120,7 +134,7 @@ func TestRequestConsumersC(t *testing.T) {
 				inStreamsAdapt = append(inStreamsAdapt, c)
 			}
 
-			RequestConsumersC(lcgRequest)(ctx, &group, inStreamsAdapt...)
+			RequestConsumersC(ExposeID(lcgRequest))(ctx, &group, inStreamsAdapt...)
 
 			requests := NewTestRequests(
 				requestCount,
@@ -183,7 +197,7 @@ func TestRequestConsumersC(t *testing.T) {
 					inStreamsAdapt = append(inStreamsAdapt, c)
 				}
 
-				RequestConsumersC(lcgRequest)(ctx, &group, inStreamsAdapt...)
+				RequestConsumersC(ExposeID(lcgRequest))(ctx, &group, inStreamsAdapt...)
 
 				var runGroup sync.WaitGroup
 
@@ -252,7 +266,7 @@ func TestRequestConsumersC(t *testing.T) {
 				inStreamsAdapt = append(inStreamsAdapt, c)
 			}
 
-			RequestConsumersC(lcgRequestSlow(time.Second))(
+			RequestConsumersC(ExposeID(lcgRequestSlow(time.Second)))(
 				ctx,
 				&group,
 				inStreamsAdapt...,

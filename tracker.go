@@ -1,16 +1,14 @@
-package dirty
+package conch
 
 import (
 	"sync"
-
-	"github.com/byte4ever/conch"
 )
 
 type (
 	tracker[R any] struct {
 		wg        sync.WaitGroup
 		wgCollect sync.WaitGroup
-		val       dirty.ValErrorPair[R]
+		val       ValErrorPair[R]
 	}
 	trackerPool[R any] chan *tracker[R]
 )
@@ -18,9 +16,9 @@ type (
 func newTracker[R any]() *tracker[R] {
 	r := &tracker[R]{}
 
-	// fmt.Println("++ wg         newTracker")
+	//fmt.Println("++ inflight         newTracker")
 	r.wg.Add(1)
-	// fmt.Println("++ wgCollect  newTracker")
+	//fmt.Println("++ wgCollect  newTracker")
 	r.wgCollect.Add(1)
 
 	return r
@@ -31,13 +29,13 @@ func (t *tracker[R]) collectBy(pool trackerPool[R]) {
 	pool.putBack(t)
 }
 
-func (t *tracker[R]) replicateValueIn(inChan chan<- dirty.ValErrorPair[R]) {
-	// fmt.Println("++ wgCollect  replicateValueIn")
+func (t *tracker[R]) replicateValueIn(inChan chan<- ValErrorPair[R]) {
+	//fmt.Println("++ wgCollect  replicateValueIn")
 	t.wgCollect.Add(1)
 
-	// fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>")
+	//fmt.Println(">>>>>>>>>>>>>>>>>>>>>>>>>>")
 	t.wg.Wait()
-	// fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<")
+	//fmt.Println("<<<<<<<<<<<<<<<<<<<<<<<<<<")
 	inChan <- t.val
 
 	// fmt.Println("-- wgCollect  replicateValueIn")
@@ -45,19 +43,19 @@ func (t *tracker[R]) replicateValueIn(inChan chan<- dirty.ValErrorPair[R]) {
 }
 
 func (t *tracker[R]) copyFromNewReturnStream(
-	inChan chan<- dirty.ValErrorPair[R],
-	outChan chan dirty.ValErrorPair[R],
-	key Key2,
+	inChan chan<- ValErrorPair[R],
+	outChan chan ValErrorPair[R],
+	key Key,
 	m *sync.Map,
-	pool conch.valErrorChanPool[R],
+	pool valErrorChanPool[R],
 ) {
 	t.val = <-outChan
 	pool.putBack(outChan)
-	// fmt.Println("-- wg         copyFromNewReturnStream")
+	//fmt.Println("-- inflight         copyFromNewReturnStream")
 	t.wg.Done()
 	inChan <- t.val
 
-	// fmt.Println("-- wgCollect  copyFromNewReturnStream")
+	//fmt.Println("-- wgCollect  copyFromNewReturnStream")
 	t.wgCollect.Done()
 	m.Delete(key)
 }
@@ -81,11 +79,11 @@ func (t trackerPool[R]) get() (nt *tracker[R]) {
 func (t trackerPool[R]) putBack(v *tracker[R]) {
 	var zeroR R
 
-	v.val = dirty.ValErrorPair[R]{V: zeroR}
+	v.val = ValErrorPair[R]{V: zeroR}
 
-	// fmt.Println("++ wg         putBack")
+	//fmt.Println("++ inflight         putBack")
 	v.wg.Add(1)
-	// fmt.Println("++ wgCollect  putBack")
+	//fmt.Println("++ wgCollect  putBack")
 	v.wgCollect.Add(1)
 
 	select {

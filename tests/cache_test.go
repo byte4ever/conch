@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/ristretto"
+	"go.uber.org/goleak"
 
 	"github.com/byte4ever/conch"
 	"github.com/byte4ever/conch/contrib/cache"
@@ -25,6 +26,7 @@ func (p PP) Hash() conch.Key {
 }
 
 func (suite *ConchTestSuite) TestCache() {
+
 	require := suite.Require()
 
 	ristrettoCache, err := ristretto.NewCache(&ristretto.Config{
@@ -39,66 +41,89 @@ func (suite *ConchTestSuite) TestCache() {
 
 	wrappedCache := cache.WrapRistretto[PP, uint64](
 		ristrettoCache,
-		15*time.Second,
+		60*time.Second,
 	)
 	require.NotNil(wrappedCache)
+
+	defer goleak.VerifyNone(suite.T(), goleak.IgnoreCurrent())
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	var group sync.WaitGroup
 
+	var beforeDedupCounter atomic.Uint64
 	var beforeCacheCounter atomic.Uint64
 	var afterCacheCounter atomic.Uint64
 
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		var beforeCacheCounterP, afterCacheCounterP uint64
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		var beforeCacheCounterP, afterCacheCounterP, beforeDedupCounterP uint64
 
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-ticker.C:
+				beforeDedupCounter := beforeDedupCounter.Load()
 				beforeCacheCounter := beforeCacheCounter.Load()
 				afterCacheCounter := afterCacheCounter.Load()
 				fmt.Printf(
-					"%8d %8d %8d %8d\n",
+					"%8d %8d %8d %8d %8d %8d\n",
+					beforeDedupCounter,
+					beforeDedupCounter-beforeDedupCounterP,
 					beforeCacheCounter,
 					beforeCacheCounter-beforeCacheCounterP,
 					afterCacheCounter,
 					afterCacheCounter-afterCacheCounterP,
 				)
+				beforeDedupCounterP = beforeDedupCounter
 				beforeCacheCounterP = beforeCacheCounter
 				afterCacheCounterP = afterCacheCounter
 			}
 		}
 	}()
 
+	const nbWorkers = 20
+
 	requester := conch.RequesterC(
 		ctx,
 		&group,
 		conch.CountsC(
-			&beforeCacheCounter,
-			conch.CacheReadInterceptorsC(
-				wrappedCache,
+			&beforeDedupCounter,
+			conch.DeduplicatorsC(
 				conch.CountsC(
-					&afterCacheCounter,
-					conch.MultiplexC(
-						32,
-						conch.CacheWriteInterceptorsC(
-							wrappedCache,
-							conch.RequestConsumersC(
-								func(
-									ctx context.Context,
-									p PP,
-								) (
-									uint64,
-									error,
-								) {
-									if p > 43 {
-										return 0, ErrToManyIteration
-									}
-									return FibonacciRecursion(uint64(p)), nil
-								}),
+					&beforeCacheCounter,
+					conch.CacheReadInterceptorsC(
+						wrappedCache,
+						conch.CountsC(
+							&afterCacheCounter,
+							conch.MultiplexC(
+								nbWorkers,
+								conch.CacheWriteInterceptorsC(
+									wrappedCache,
+									conch.RequestConsumersC(
+										func(
+											ctx context.Context,
+											id int,
+											p PP,
+										) (
+											uint64,
+											error,
+										) {
+											if p > 44 {
+												return 0, ErrToManyIteration
+											}
+											result := FibonacciRecursion(
+												uint64(p),
+											)
+											return result,
+												nil
+										},
+									),
+								),
+							),
 						),
 					),
 				),
@@ -106,39 +131,36 @@ func (suite *ConchTestSuite) TestCache() {
 		),
 	)
 
+	const (
+		nbRequestPerRequester = 100_000
+		nbRequesterThreads    = 10
+	)
+
 	var runGroup sync.WaitGroup
-	runGroup.Add(30)
-	for i := 0; i < 30; i++ {
-		go func() {
+	runGroup.Add(nbRequesterThreads)
+	for i := 0; i < nbRequesterThreads; i++ {
+		go func(idx int) {
 			defer runGroup.Done()
-			for i := 0; i < 1_000_000; i++ {
-				n := rand.Int63n(44)
-
-				//s := time.Now()
-				_, err := requester(context.Background(), PP(n))
-				//d := time.Since(s)
-
-				//if n >= 40 && d > time.Millisecond {
-				//fmt.Printf(
-				//	"%2d %12.6f\n",
-				//	n,
-				//	d.Seconds(),
-				//)
-				//}
-
-				require.NoError(err)
-				//time.Sleep(time.Millisecond)
+			time.Sleep(
+				time.Duration(intervalInt63nRand(500, 10_000)) *
+					time.Millisecond,
+			)
+			for i := 0; i < nbRequestPerRequester; i++ {
+				require.Eventually(func() bool {
+					n := intervalInt63nRand(1, 10)
+					_, _ = requester(context.Background(), PP(n))
+					return true
+				}, 90*time.Second, 10*time.Millisecond)
 			}
-		}()
+		}(i)
 	}
-
-	//here am i trying to check cache.
 
 	runGroup.Wait()
 
 	cancel()
 	group.Wait()
 
+	fmt.Println(beforeDedupCounter.Load())
 	fmt.Println(beforeCacheCounter.Load())
 	fmt.Println(afterCacheCounter.Load())
 }
@@ -151,4 +173,8 @@ func FibonacciRecursion(n uint64) uint64 {
 		return n
 	}
 	return FibonacciRecursion(n-1) + FibonacciRecursion(n-2)
+}
+
+func intervalInt63nRand(a, b int64) int64 {
+	return a + rand.Int63n(b-a)
 }

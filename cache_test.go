@@ -40,38 +40,37 @@ func TestCacheInterceptorC(t *testing.T) {
 
 	cacheMock := NewMockCache[PP, uint64](t)
 
-	cacheMock.
-		On(
-			"Get",
-			matchAnyCtx,
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(0),
 		).
 		Return(
 			uint64(1000),
 			true,
 		).
-		Once().
-		On(
-			"Get",
-			matchAnyCtx,
+		Once()
+
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(1),
 		).
 		Return(
 			uint64(0),
 			false,
 		).
-		Once().
-		On(
-			"Store",
+		Once()
+
+	cacheMock.EXPECT().
+		Store(
 			matchAnyCtx,
 			PP(1),
 			uint64(100),
 		).
 		Return().
-		Once().
-		On(
-			"Get",
-			matchAnyCtx,
+		Once()
+
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(2),
 		).
 		Return(
@@ -79,20 +78,24 @@ func TestCacheInterceptorC(t *testing.T) {
 			false,
 		)
 
-	requesterFunc := NewMockRequestFunc[PP, uint64](t)
-	requesterFunc.
-		On(
-			"Execute",
+	requesterFunc := NewMockRequestProcessingFunc[PP, uint64](t)
+
+	requesterFunc.EXPECT().
+		Execute(
 			matchAnyCtx,
+			0,
 			PP(1),
 		).
 		Return(
 			uint64(100),
 			nil,
-		).Once().
-		On(
-			"Execute",
+		).
+		Once()
+
+	requesterFunc.EXPECT().
+		Execute(
 			matchAnyCtx,
+			0,
 			PP(2),
 		).
 		Return(
@@ -144,38 +147,37 @@ func TestCacheInterceptorsC(t *testing.T) {
 
 	cacheMock := NewMockCache[PP, uint64](t)
 
-	cacheMock.
-		On(
-			"Get",
-			matchAnyCtx,
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(0),
 		).
 		Return(
 			uint64(1000),
 			true,
 		).
-		Once().
-		On(
-			"Get",
-			matchAnyCtx,
+		Once()
+
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(1),
 		).
 		Return(
 			uint64(0),
 			false,
 		).
-		Once().
-		On(
-			"Store",
+		Once()
+
+	cacheMock.EXPECT().
+		Store(
 			matchAnyCtx,
 			PP(1),
 			uint64(100),
 		).
 		Return().
-		Once().
-		On(
-			"Get",
-			matchAnyCtx,
+		Once()
+
+	cacheMock.EXPECT().
+		Get(matchAnyCtx,
 			PP(2),
 		).
 		Return(
@@ -183,20 +185,23 @@ func TestCacheInterceptorsC(t *testing.T) {
 			false,
 		)
 
-	requesterFunc := NewMockRequestFunc[PP, uint64](t)
-	requesterFunc.
-		On(
-			"Execute",
+	requesterFunc := NewMockRequestProcessingFunc[PP, uint64](t)
+
+	requesterFunc.EXPECT().
+		Execute(
 			matchAnyCtx,
+			0,
 			PP(1),
 		).
 		Return(
 			uint64(100),
 			nil,
-		).Once().
-		On(
-			"Execute",
+		).Once()
+
+	requesterFunc.EXPECT().
+		Execute(
 			matchAnyCtx,
+			0,
 			PP(2),
 		).
 		Return(

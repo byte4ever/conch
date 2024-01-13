@@ -34,13 +34,6 @@ type (
 		~float32 | ~float64
 	}
 
-	// Complex is a constraint that permits any complex numeric type.
-	// If future releases of Go add new predeclared complex numeric types,
-	// this constraint will be modified to include them.
-	Complex interface {
-		~complex64 | ~complex128
-	}
-
 	// Ordered is a constraint that permits any ordered type: any type
 	// that supports the operators < <= >= >.
 	// If future releases of Go add new ordered types,
@@ -57,10 +50,6 @@ type (
 	IndexedInteger[V Integer, Payload any] struct {
 		Index   V
 		Payload Payload
-	}
-
-	Comparable interface {
-		LessThan(other Comparable) bool
 	}
 
 	Generator[T any] func(ctx context.Context) (output <-chan T, err error)
@@ -93,9 +82,7 @@ type (
 	)
 
 	Request[P any, R any] struct {
-		P P
-		//Return      func(context.Context, ValErrorPair[R])
-		//NakedReturn func(provider ValErrorPairProvider[R])
+		P    P
 		Ctx  context.Context
 		Chan chan<- ValErrorPair[R]
 	}
@@ -103,8 +90,17 @@ type (
 	ReturnFun[R any] func(context.Context, ValErrorPair[R])
 
 	RequestFunc[P, R any] func(
-		context.Context,
-		P,
+		ctx context.Context,
+		params P,
+	) (
+		R,
+		error,
+	)
+
+	RequestProcessingFunc[P, R any] func(
+		ctx context.Context,
+		id int,
+		params P,
 	) (
 		R,
 		error,
