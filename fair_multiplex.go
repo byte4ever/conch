@@ -37,7 +37,7 @@ func fairMerge[T any](
 			select {
 			case <-ctx.Done():
 				return
-			case t, more := <-i1:
+			case fromStream1, more := <-i1:
 				if !more {
 					i1 = nil
 
@@ -49,12 +49,12 @@ func fairMerge[T any](
 				}
 
 				select {
-				case multiplexedOutStream <- t:
+				case multiplexedOutStream <- fromStream1:
 				case <-ctx.Done():
 					return
 				}
 
-			case t, more := <-inStream2:
+			case fromStream2, more := <-i2:
 				if !more {
 					i2 = nil
 
@@ -66,7 +66,7 @@ func fairMerge[T any](
 				}
 
 				select {
-				case multiplexedOutStream <- t:
+				case multiplexedOutStream <- fromStream2:
 				case <-ctx.Done():
 					return
 				}

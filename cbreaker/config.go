@@ -6,9 +6,9 @@ import (
 
 type (
 	config struct {
-		nbFailureToOpen  int
-		nbSuccessToClose int
-		halfOpenTimeout  time.Duration
+		nbFailureToOpen  *int
+		nbSuccessToClose *int
+		halfOpenTimeout  *time.Duration
 	}
 
 	Option interface {
@@ -16,10 +16,14 @@ type (
 	}
 )
 
+func ref[T any](v T) *T {
+	return &v
+}
+
 var (
-	defaultConfig = config{
-		nbFailureToOpen:  4,
-		nbSuccessToClose: 2,
-		halfOpenTimeout:  5 * time.Second,
+	defaultConfig = config{ //nolint:gochecknoglobals // thats default
+		nbFailureToOpen:  ref(4),
+		nbSuccessToClose: ref(2),
+		halfOpenTimeout:  ref(5 * time.Second),
 	}
 )

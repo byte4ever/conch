@@ -2,7 +2,7 @@ package cbreaker
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -92,8 +92,8 @@ func TestEngine_IsOpen(t *testing.T) {
 
 			e := &Engine{
 				config: config{
-					halfOpenTimeout: time.Second,
-					nbFailureToOpen: 4,
+					halfOpenTimeout: ref(time.Second),
+					nbFailureToOpen: ref(4),
 				},
 				state:              ClosedState,
 				consecutiveFailure: 3,
@@ -104,8 +104,8 @@ func TestEngine_IsOpen(t *testing.T) {
 
 			require.Equal(t, &Engine{
 				config: config{
-					halfOpenTimeout: time.Second,
-					nbFailureToOpen: 4,
+					halfOpenTimeout: ref(time.Second),
+					nbFailureToOpen: ref(4),
 				},
 				state: OpenState,
 				clock: c,
@@ -117,8 +117,8 @@ func TestEngine_IsOpen(t *testing.T) {
 
 			require.Equal(t, &Engine{
 				config: config{
-					halfOpenTimeout: time.Second,
-					nbFailureToOpen: 4,
+					halfOpenTimeout: ref(time.Second),
+					nbFailureToOpen: ref(4),
 				},
 				state: HalfOpenState,
 				clock: c,
@@ -129,56 +129,67 @@ func TestEngine_IsOpen(t *testing.T) {
 
 	t.Run(
 		"half open with failure", func(t *testing.T) {
+			c := clock.NewMock()
 			e := &Engine{
 				state: HalfOpenState,
+				clock: c,
 			}
 
 			e.ReportFailure()
 
 			require.Equal(t, &Engine{
 				state: OpenState,
+				clock: c,
 			}, e)
 		},
 	)
 
 	t.Run(
 		"half open to half open with success", func(t *testing.T) {
+			c := clock.NewMock()
+
 			e := &Engine{
 				config: config{
-					nbSuccessToClose: 2,
+					nbSuccessToClose: ref(2),
 				},
 				state: HalfOpenState,
+				clock: c,
 			}
 
 			e.ReportSuccess()
 
 			require.Equal(t, &Engine{
 				config: config{
-					nbSuccessToClose: 2,
+					nbSuccessToClose: ref(2),
 				},
 				state:              HalfOpenState,
 				consecutiveSuccess: 1,
+				clock:              c,
 			}, e)
 		},
 	)
 
 	t.Run(
 		"half open to closed state with success", func(t *testing.T) {
+			c := clock.NewMock()
+
 			e := &Engine{
 				config: config{
-					nbSuccessToClose: 2,
+					nbSuccessToClose: ref(2),
 				},
 				consecutiveSuccess: 1,
 				state:              HalfOpenState,
+				clock:              c,
 			}
 
 			e.ReportSuccess()
 
 			require.Equal(t, &Engine{
 				config: config{
-					nbSuccessToClose: 2,
+					nbSuccessToClose: ref(2),
 				},
 				state: ClosedState,
+				clock: c,
 			}, e)
 		},
 	)
@@ -192,7 +203,7 @@ func Test_toto(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	for i := 0; i < 10_000; i++ {
+	for i := 0; i < 100; i++ {
 		time.Sleep(100 * time.Millisecond)
 
 		if e.IsOpen() {

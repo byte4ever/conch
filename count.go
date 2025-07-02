@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 )
 
+// Count counts how many elements are going through a single stream.
 func Count[T any](
 	ctx context.Context,
 	counter *atomic.Uint64,
@@ -39,6 +40,7 @@ func Count[T any](
 	return outStream
 }
 
+// CountsC counts how many elements are going through multiple streams.
 func CountsC[T any](
 	counter *atomic.Uint64,
 	chain ChainsFunc[T],

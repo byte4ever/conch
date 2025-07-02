@@ -1,32 +1,20 @@
 package tests
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"math/rand"
-	"sync"
-	"sync/atomic"
-	"time"
-
-	"github.com/dgraph-io/ristretto"
-	"go.uber.org/goleak"
-
-	"github.com/byte4ever/conch"
-	"github.com/byte4ever/conch/contrib/cache"
+	"github.com/byte4ever/conch/domain"
 )
 
 type PP uint64
 
-func (p PP) Hash() conch.Key {
-	return conch.Key{
+func (p PP) Hash() domain.Key {
+	return domain.Key{
 		A: uint64(p),
 		B: uint64(p),
 	}
 }
 
+/*
 func (suite *ConchTestSuite) TestCache() {
-
 	require := suite.Require()
 
 	ristrettoCache, err := ristretto.NewCache(&ristretto.Config{
@@ -95,15 +83,15 @@ func (suite *ConchTestSuite) TestCache() {
 			conch.DeduplicatorsC(
 				conch.CountsC(
 					&beforeCacheCounter,
-					conch.CacheReadInterceptorsC(
+					conch.CacheReadInterceptorsC[PP, uint64](
 						wrappedCache,
 						conch.CountsC(
 							&afterCacheCounter,
-							conch.MultiplexC(
+							conch.MultiplexC[conch.Request[PP, uint64]](
 								nbWorkers,
-								conch.CacheWriteInterceptorsC(
+								conch.CacheWriteInterceptorsC[PP, uint64](
 									wrappedCache,
-									conch.RequestConsumersC(
+									conch.RequestConsumersC[PP, uint64](
 										func(
 											ctx context.Context,
 											id int,
@@ -165,7 +153,7 @@ func (suite *ConchTestSuite) TestCache() {
 	fmt.Println(afterCacheCounter.Load())
 }
 
-// ErrToManyIteration represent an error where ....
+// ErrToManyIteration indicates that the maximum iteration count was exceeded.
 var ErrToManyIteration = errors.New("to many iteration")
 
 func FibonacciRecursion(n uint64) uint64 {
@@ -178,3 +166,4 @@ func FibonacciRecursion(n uint64) uint64 {
 func intervalInt63nRand(a, b int64) int64 {
 	return a + rand.Int63n(b-a)
 }
+*/

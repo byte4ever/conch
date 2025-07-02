@@ -55,12 +55,12 @@ type (
 	Generator[T any] func(ctx context.Context) (output <-chan T, err error)
 
 	Doer[T any] func(ctx context.Context, id int, param T)
+
 	// Processor defines a function that read from a single input stream and
 	// produce elements to the resulting output stream.
-
-	Processor[From, To any] func(
-		ctx context.Context, input <-chan From,
-	) <-chan To
+	// Processor[From, To any] func(
+	// 	ctx context.Context, input <-chan From,
+	// ) <-chan To
 
 	ValErrorPair[V any] struct {
 		V   V
@@ -89,6 +89,14 @@ type (
 
 	ReturnFun[R any] func(context.Context, ValErrorPair[R])
 
+	IndexedRequestFunc[V Ordered, P, R any] func(
+		ctx context.Context,
+		params Indexed[V, P],
+	) (
+		Indexed[V, R],
+		error,
+	)
+
 	RequestFunc[P, R any] func(
 		ctx context.Context,
 		params P,
@@ -108,27 +116,37 @@ type (
 
 	ValErrorPairProvider[R any] func(ctx context.Context) ValErrorPair[R]
 
-	Key struct {
-		A, B uint64
-	}
-
-	Hashable interface {
-		Hash() Key
-	}
-
-	Cache[P Hashable, R any] interface {
-		Get(ctx context.Context, key P) (R, bool)
-		Store(ctx context.Context, key P, value R)
-	}
+	None struct{}
 )
-
-func (k Key) Values() (uint64, uint64) {
-	return k.A, k.B
-}
 
 func ToValError[V any](v V, err error) ValErrorPair[V] {
 	return ValErrorPair[V]{
 		V:   v,
 		Err: err,
 	}
+}
+
+func WrapToIndexedRequester[V Ordered, P, R any](
+	f RequestFunc[P, R],
+) IndexedRequestFunc[V, P, R] {
+	return func(
+		ctx context.Context,
+		params Indexed[V, P],
+	) (Indexed[V, R], error) {
+		result, err := f(ctx, params.Payload)
+
+		return Indexed[V, R]{
+			Index:   params.Index,
+			Payload: result,
+		}, err
+	}
+}
+
+func (p ValErrorPair[V]) SetValue(v V) {
+	p.V, p.Err = v, nil
+}
+
+func (p ValErrorPair[V]) SetError(e error) {
+	var zero V
+	p.V, p.Err = zero, e
 }

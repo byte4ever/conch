@@ -20,7 +20,7 @@ func (n FailureToOpenOpt) apply(conf *config) error {
 		)
 	}
 
-	conf.nbFailureToOpen = int(n)
+	conf.nbFailureToOpen = ref(int(n))
 
 	return nil
 }

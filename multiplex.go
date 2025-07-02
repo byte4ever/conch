@@ -114,8 +114,14 @@ func MultiplexC[T any](
 	chains ChainsFunc[T],
 ) ChainsFunc[T] {
 	return func(
-		ctx context.Context, wg *sync.WaitGroup, inStream ...<-chan T,
+		ctx context.Context,
+		wg *sync.WaitGroup,
+		inStream ...<-chan T,
 	) {
-		chains(ctx, wg, Multiplex(ctx, count, inStream...)...)
+		chains(
+			ctx,
+			wg,
+			Multiplex(ctx, count, inStream...)...,
+		)
 	}
 }

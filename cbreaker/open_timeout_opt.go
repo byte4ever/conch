@@ -16,7 +16,7 @@ func (n OpenTimeoutOpt) apply(conf *config) error {
 		)
 	}
 
-	conf.halfOpenTimeout = time.Duration(n)
+	conf.halfOpenTimeout = ref(time.Duration(n))
 
 	return nil
 }

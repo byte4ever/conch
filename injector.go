@@ -5,8 +5,11 @@ import (
 	"sync"
 )
 
-// TODO :- lmartin 10/26/23 -: add closer to process.
-
+// Injector creates an injector function to feed data into a channel stream.
+// It manages synchronization and cleanup using context and a wait group.
+// Accepts a context and returns an injection function and an output channel.
+// The injection function sends items into the stream respecting context rules.
+// The output channel emits the injected items, closing when the context ends.
 func Injector[T any](
 	ctx context.Context,
 ) (
@@ -57,6 +60,8 @@ func Injector[T any](
 		outStream
 }
 
+// InjectorC creates an injector function that feeds data into a chain of streams.
+// The function uses a context and wait group for synchronization.
 func InjectorC[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,

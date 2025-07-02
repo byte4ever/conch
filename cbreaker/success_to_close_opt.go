@@ -19,7 +19,7 @@ func (n SuccessToCloseOpt) apply(conf *config) error {
 		)
 	}
 
-	conf.nbSuccessToClose = int(n)
+	conf.nbSuccessToClose = ref(int(n))
 
 	return nil
 }
