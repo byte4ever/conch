@@ -5,6 +5,11 @@ import (
 	"sync"
 )
 
+// Unbatch converts a stream of slices into a flat stream of individual
+// elements. Processes slices received via the input channel and emits elements
+// sequentially. Supports context cancellation and waits for completion via
+// WaitGroup. Closes the output channel when all elements are processed or
+// context is done.
 func Unbatch[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -44,6 +49,8 @@ func Unbatch[T any](
 	return outStream
 }
 
+// UnbatchC combines Unbatch with a ChainFunc for processing slice streams. It
+// serializes elements from slices and passes results to the next ChainFunc.
 func UnbatchC[T any](
 	chain ChainFunc[T],
 ) ChainFunc[[]T] {
@@ -64,6 +71,10 @@ func UnbatchC[T any](
 	}
 }
 
+// Unbatches transforms multiple channels of slices into channels of individual
+// elements. It utilizes the Unbatch function for each input channel and returns
+// a slice of output channels. Supports context cancellation and ensures proper
+// synchronization via WaitGroup.
 func Unbatches[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -89,6 +100,9 @@ func Unbatches[T any](
 	return
 }
 
+// UnbatchesC transforms a ChainsFunc of slices into a ChainsFunc of elements.
+// It uses the Unbatches function to flatten incoming streams of slices.
+// Supports context handling and WaitGroup synchronization.
 func UnbatchesC[T any](
 	chains ChainsFunc[T],
 ) ChainsFunc[[]T] {
