@@ -59,7 +59,7 @@ func (r *Readiness) GetRecap() (state bool, recap Recap) {
 
 type Probe interface {
 	GetLabel() string
-	IsWorking() (state bool, reason string)
+	IsWorking() (working bool, reason string)
 }
 
 func (r *Readiness) Register(p Probe) {
@@ -69,5 +69,34 @@ func (r *Readiness) Register(p Probe) {
 	r.Probes[label] = p
 }
 
-func (r *Readiness) IsWorking() (state bool, recap Recap) {
+func (r *Readiness) IsWorking() (working bool, recap Recap) {
+	var okLabels []string
+	failureReports := make(map[string]Report)
+
+	for _, label := range r.Labels {
+		if report := r.evaluateProbe(label); report != nil {
+			failureReports[label] = *report
+			continue
+		}
+
+		okLabels = append(okLabels, label)
+	}
+
+	allProbesWorking := len(failureReports) == 0
+
+	return allProbesWorking, Recap{
+		TS:    time.Now().UTC(),
+		Ready: allProbesWorking,
+		Ok:    okLabels,
+		NOk:   failureReports,
+	}
+}
+
+func (r *Readiness) evaluateProbe(label string) *Report {
+	isWorking, reason := r.Probes[label].IsWorking()
+	if isWorking {
+		return nil
+	}
+
+	return &Report{Reason: reason}
 }
