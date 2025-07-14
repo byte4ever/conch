@@ -1,3 +1,5 @@
+// Package readiness provides functionality for monitoring application readiness.
+// This file implements readiness checking with multiple probes and result aggregation.
 package readiness
 
 import (
@@ -5,10 +7,12 @@ import (
 	"time"
 )
 
+// Readiness manages multiple readiness probes and their evaluation results.
+// It maintains a collection of probes and provides methods to check overall readiness.
 type Readiness struct {
-	Labels []string
-	Recap  Recap
-	Probes map[string]Probe
+	Labels []string          // Ordered list of probe labels
+	Recap  Recap             // Last evaluation results
+	Probes map[string]Probe  // Map of probe labels to probe instances
 }
 
 func NewReadiness() *Readiness {
@@ -22,15 +26,20 @@ func NewReadiness() *Readiness {
 	}
 }
 
+// Report represents a failure report for a readiness probe.
+// It contains the reason why a probe failed its readiness check.
 type Report struct {
-	Reason string `json:"Reason,omitempty,omitzero"`
+	Reason string `json:"Reason,omitempty,omitzero"` // The reason for probe failure
 }
 
+// Recap represents a summary of all readiness probe evaluations.
+// It includes the evaluation timestamp, overall readiness status,
+// and lists of successful and failed probes.
 type Recap struct {
-	TS    time.Time         `json:"TS"`
-	Ready bool              `json:"Ready,omitempty,omitzero"`
-	Ok    []string          `json:"Ok,omitempty,omitzero"`
-	NOk   map[string]Report `json:"NOk,omitempty,omitzero"`
+	TS    time.Time         `json:"TS"`                      // Timestamp of the evaluation
+	Ready bool              `json:"Ready,omitempty,omitzero"` // Overall readiness status
+	Ok    []string          `json:"Ok,omitempty,omitzero"`   // List of successful probe labels
+	NOk   map[string]Report `json:"NOk,omitempty,omitzero"`  // Map of failed probe labels to reports
 }
 
 func (r *Readiness) GetRecap() (state bool, recap Recap) {

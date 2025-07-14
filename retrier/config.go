@@ -13,16 +13,18 @@ const (
 	DefaultJitterFactor = goldenRatioValue - 1
 )
 
+// config holds the configuration parameters for retry behavior.
+// It defines limits, delays, and functions that control retry logic.
 type config struct {
-	maxRetry    *int
-	maxDuration *time.Duration
+	maxRetry    *int           // Maximum number of retry attempts (nil for unlimited)
+	maxDuration *time.Duration // Maximum total duration for all retry attempts
 
-	retryDelay    *time.Duration
-	jitterFactor  *float64
-	backoffFactor *float64
+	retryDelay    *time.Duration // Initial delay between retry attempts
+	jitterFactor  *float64      // Factor for adding randomness to retry delays
+	backoffFactor *float64      // Factor for exponential backoff growth
 
-	mustRetryFunc func(error) bool
-	maxRetryDelay *time.Duration
+	mustRetryFunc func(error) bool // Function to determine if an error should trigger retry
+	maxRetryDelay *time.Duration    // Maximum delay between individual retry attempts
 }
 
 // ErrInvalidValue represent an error where ....

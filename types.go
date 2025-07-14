@@ -42,14 +42,19 @@ type (
 		Integer | Float | ~string
 	}
 
+	// Indexed represents a payload with an ordered index.
+	// It combines an index value with a payload, commonly used for
+	// maintaining order in stream processing operations.
 	Indexed[V Ordered, Payload any] struct {
-		Index   V
-		Payload Payload
+		Index   V       // The index value used for ordering
+		Payload Payload // The actual data payload
 	}
 
+	// IndexedInteger represents a payload with an integer index.
+	// Similar to Indexed but specifically constrained to integer index types.
 	IndexedInteger[V Integer, Payload any] struct {
-		Index   V
-		Payload Payload
+		Index   V       // The integer index value
+		Payload Payload // The actual data payload
 	}
 
 	Generator[T any] func(ctx context.Context) (output <-chan T, err error)
@@ -62,9 +67,12 @@ type (
 	// 	ctx context.Context, input <-chan From,
 	// ) <-chan To
 
+	// ValErrorPair represents a value-error pair for result handling.
+	// It encapsulates either a successful value or an error state,
+	// commonly used in stream processing for error propagation.
 	ValErrorPair[V any] struct {
-		V   V
-		Err error
+		V   V     // The value component (zero value if error occurred)
+		Err error // The error component (nil if successful)
 	}
 
 	FilterFunc[T any] func(ctx context.Context, v T) bool
@@ -81,10 +89,13 @@ type (
 		inStream ...<-chan T,
 	)
 
+	// Request represents a request with parameters and response channel.
+	// It encapsulates the parameter data, context, and a channel for receiving
+	// the response wrapped in a ValErrorPair for error handling.
 	Request[P any, R any] struct {
-		P    P
-		Ctx  context.Context
-		Chan chan<- ValErrorPair[R]
+		P    P                        // The request parameters
+		Ctx  context.Context          // The request context for cancellation
+		Chan chan<- ValErrorPair[R]   // Channel for receiving the response
 	}
 
 	ReturnFun[R any] func(context.Context, ValErrorPair[R])
@@ -116,6 +127,8 @@ type (
 
 	ValErrorPairProvider[R any] func(ctx context.Context) ValErrorPair[R]
 
+	// None represents an empty struct used as a placeholder or unit type.
+	// It's commonly used when a type parameter is required but no actual data is needed.
 	None struct{}
 )
 

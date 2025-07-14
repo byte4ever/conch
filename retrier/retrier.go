@@ -26,9 +26,9 @@ var (
 )
 
 // RetryableError wraps an error to indicate it is a retryable condition.
-// Err is the underlying error wrapped by RetryableError.
+// It implements the error interface and provides unwrapping functionality.
 type RetryableError struct {
-	Err error
+	Err error // The underlying error wrapped by RetryableError
 }
 
 // Error returns the string representation of the RetryableError.
@@ -80,8 +80,8 @@ type Retrier struct {
 	// config represents the retry configuration parameters.
 	config
 
-	jitterFunc func() float64
-	growthFunc func(int) float64
+	jitterFunc func() float64   // Function to calculate jitter values for retry delays
+	growthFunc func(int) float64 // Function to calculate exponential backoff growth
 }
 
 // New creates a new Retrier instance with the given configuration options.

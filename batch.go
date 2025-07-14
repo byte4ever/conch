@@ -46,6 +46,8 @@ func Batch[T any](
 					return
 				}
 
+				curBatch = append(curBatch, elem)
+
 				if len(curBatch) == size {
 					select {
 					case <-ctx.Done():
@@ -53,8 +55,6 @@ func Batch[T any](
 					case outStream <- curBatch:
 						curBatch = make([]T, 0, size)
 					}
-				} else {
-					curBatch = append(curBatch, elem)
 				}
 			}
 		}

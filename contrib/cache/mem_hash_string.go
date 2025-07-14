@@ -12,10 +12,11 @@ import (
 func memhash(p unsafe.Pointer, h, s uintptr) uintptr
 
 // stringStruct is an internal representation of a string in memory.
-// It includes a pointer to the string data and the string length.
+// It mirrors the runtime string structure to access the underlying data pointer and length.
+// This is used for efficient string hashing without additional allocations.
 type stringStruct struct {
-	str unsafe.Pointer
-	len int
+	str unsafe.Pointer // Pointer to the string data
+	len int            // Length of the string
 }
 
 // MemHashString computes a hash for the given string using runtime.memhash.

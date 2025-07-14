@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/byte4ever/conch/domain"
 )
 
 // MyProcessable implements the Processable interface for demonstration.

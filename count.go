@@ -14,8 +14,8 @@ import (
 func Count[T any](
 	ctx context.Context,
 	counter *atomic.Uint64,
-	inStream -chan T,
-) -chan T {
+	inStream <-chan T,
+) <-chan T {
 	outStream := make(chan T)
 
 	go func() {
