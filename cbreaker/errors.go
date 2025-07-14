@@ -1,3 +1,5 @@
+// Package cbreaker provides circuit breaker functionality for stream processing.
+// This file defines error variables for circuit breaker configuration validation.
 package cbreaker
 
 import (
@@ -5,12 +7,18 @@ import (
 )
 
 var (
-	// ErrInvalidFailureToOpen represent an error where ....
+	// ErrInvalidFailureToOpen is returned when the failure threshold is invalid.
+	// This error occurs when attempting to set a zero or negative value for the
+	// number of failures required to open the circuit breaker.
 	ErrInvalidFailureToOpen = errors.New("must be non zero positive integer")
 
-	// ErrInvalidSuccessToClose represent an error where ....
+	// ErrInvalidSuccessToClose is returned when the success threshold is invalid.
+	// This error occurs when attempting to set a zero or negative value for the
+	// number of successes required to close the circuit breaker.
 	ErrInvalidSuccessToClose = errors.New("must be non zero positive integer")
 
-	// ErrInvalidOpenTimeout represent an error where ....
+	// ErrInvalidOpenTimeout is returned when the timeout duration is invalid.
+	// This error occurs when attempting to set a zero or negative duration for
+	// the half-open timeout period.
 	ErrInvalidOpenTimeout = errors.New("must be non zero positive duration")
 )

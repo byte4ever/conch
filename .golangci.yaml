@@ -6,7 +6,7 @@
 # it contains the exhaustive configuration with explanations of the options.
 
 # Defines the configuration version.
-# The only possible value is "2".
+# The only possible value is "2" for golangci-lint v2.
 version: "2"
 
 linters:
@@ -120,7 +120,7 @@ linters:
     - wastedassign
     #    - whitespace
     - wrapcheck
-    - wsl
+    - wsl_v5
   #    - zerologlint
 
   # Disable specific linter.
@@ -2538,9 +2538,9 @@ linters:
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#max-control-nesting
         - name: max-control-nesting
           severity: warning
-          disabled: true
+          disabled: false
           exclude: [ "" ]
-          arguments: [ 3 ]
+          arguments: [ 5 ]
         # https://github.com/mgechev/revive/blob/HEAD/RULES_DESCRIPTIONS.md#max-public-structs
         - name: max-public-structs
           severity: warning
@@ -3394,8 +3394,8 @@ linters:
         # - `lower`
         # - `header`
         rules:
-          json: camel
-          yaml: camel
+          json: snake
+          yaml: snake
           xml: camel
           toml: camel
           bson: camel
@@ -3408,6 +3408,8 @@ linters:
         # Important: the `extended-rules` overrides `rules`.
         # Default: empty
         extended-rules:
+          yaml:
+            case: snake
           json:
             # Supported string cases:
             # - `camel`
@@ -3424,7 +3426,7 @@ linters:
             # - `header`
             #
             # Required
-            case: camel
+            case: snake
             # Adds 'AMQP', 'DB', 'GID', 'RTP', 'SIP', 'TS' to initialisms,
             # and removes 'LHS', 'RHS' from initialisms.
             # Default: false
@@ -3438,34 +3440,34 @@ linters:
         # Uses the struct field name to check the name of the struct tag.
         # Default: false
         use-field-name: true
-        # The field names to ignore.
-        # Default: []
-        ignored-fields:
-          - Bar
-          - Foo
-        # Overrides the default/root configuration.
-        # Default: []
-        overrides:
-          - # The package path (uses `/` only as a separator).
-            # Required
-            pkg: foo/bar
-            # Default: empty or the same as the default/root configuration.
-            rules:
-              json: snake
-              xml: pascal
-            # Default: empty or the same as the default/root configuration.
-            extended-rules:
-            # Same options as the base `extended-rules`.
-            # Default: false (WARNING: it doesn't follow the default/root configuration)
-            use-field-name: true
-            # The field names to ignore.
-            # Default: [] or the same as the default/root configuration.
-            ignored-fields:
-              - Bar
-              - Foo
-            # Ignore the package (takes precedence over all other configurations).
-            # Default: false
-            ignore: true
+          # The field names to ignore.
+          # Default: []
+          #        ignored-fields:
+          #          - Bar
+          #          - Foo
+          # Overrides the default/root configuration.
+          # Default: []
+          #        overrides:
+          #- # The package path (uses `/` only as a separator).
+          # Required
+          #            pkg: foo/bar
+          # Default: empty or the same as the default/root configuration.
+          #            rules:
+          #              json: snake
+          #              xml: pascal
+          # Default: empty or the same as the default/root configuration.
+          #            extended-rules:
+          # Same options as the base `extended-rules`.
+          # Default: false (WARNING: it doesn't follow the default/root configuration)
+          #            use-field-name: true
+          # The field names to ignore.
+          # Default: [] or the same as the default/root configuration.
+          #            ignored-fields:
+          #              - Bar
+          #              - Foo
+          # Ignore the package (takes precedence over all other configurations).
+        # Default: false
+        #            ignore: true
 
     testifylint:
       # Enable all checkers (https://github.com/Antonboom/testifylint#checkers).
@@ -3669,25 +3671,25 @@ linters:
       # Default: false
       check-exported: true
 
-    unused:
-      # Mark all struct fields that have been written to as used.
-      # Default: true
-      field-writes-are-uses: false
-      # Treat IncDec statement (e.g. `i++` or `i--`) as both read and write operation instead of just write.
-      # Default: false
-      post-statements-are-reads: true
-      # Mark all exported fields as used.
-      # default: true
-      exported-fields-are-used: false
-      # Mark all function parameters as used.
-      # default: true
-      parameters-are-used: false
-      # Mark all local variables as used.
-      # default: true
-      local-variables-are-used: false
-      # Mark all identifiers inside generated files as used.
-      # Default: true
-      generated-is-used: false
+    unused: { }
+    # Mark all struct fields that have been written to as used.
+    # Default: true
+    #      field-writes-are-uses: false
+    # Treat IncDec statement (e.g. `i++` or `i--`) as both read and write operation instead of just write.
+    # Default: false
+    #      post-statements-are-reads: true
+    # Mark all exported fields as used.
+    # default: true
+    #      exported-fields-are-used: false
+    # Mark all function parameters as used.
+    # default: true
+    #      parameters-are-used: false
+    # Mark all local variables as used.
+    # default: true
+    #      local-variables-are-used: false
+    # Mark all identifiers inside generated files as used.
+    # Default: true
+    #      generated-is-used: false
 
     varnamelen:
       # The longest distance, in source lines, that is being considered a "small scope".
@@ -4114,113 +4116,6 @@ issues:
   fix: false
 
 
-# Output configuration options.
-output:
-  # The formats used to render issues.
-  formats:
-    # Prints issues in a text format with colors, line number, and linter name.
-    # This format is the default format.
-    text:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.txt
-    # Print linter name in the end of issue text.
-    # Default: true
-    #      print-linter-name: false
-    # Print lines of code with issue.
-    # Default: true
-    #      print-issued-lines: false
-    # Use colors.
-    # Default: true
-    #      colors: false
-    # Prints issues in a JSON representation.
-    json:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.json
-    # Prints issues in columns representation separated by tabulations.
-    tab:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.txt
-    # Print linter name in the end of issue text.
-    # Default: true
-    #      print-linter-name: true
-    # Use colors.
-    # Default: true
-    #      colors: false
-    # Prints issues in an HTML page.
-    # It uses the Cloudflare CDN (cdnjs) and React.
-    html:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.html
-    # Prints issues in the Checkstyle format.
-    checkstyle:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.xml
-    # Prints issues in the Code Climate format.
-    code-climate:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.json
-    # Prints issues in the JUnit XML format.
-    junit-xml:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.xml
-    # Support extra JUnit XML fields.
-    # Default: false
-    #      extended: true
-    # Prints issues in the TeamCity format.
-    teamcity:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-    #      path: ./path/to/output.txt
-    # Prints issues in the SARIF format.
-    sarif:
-    # Output path can be either `stdout`, `stderr` or path to the file to write to.
-    # Default: stdout
-  #      path: ./path/to/output.json
-
-  # Add a prefix to the output file references.
-  # This option is ignored when using `output.path-mode: abs` mode.
-  # Default: ""
-  path-prefix: ""
-
-  # By default, the report are related to the path obtained by `run.relative-path-mode`.
-  # The mode `abs` allows to show absolute file paths instead of relative file paths.
-  # The option `output.path-prefix` is ignored when using `abs` mode.
-  # Default: ""
-  #  path-mode: "abs"
-
-  # Sort results by the specified order.
-  # Default: false
-  sort-results: true
-  
-  # Order to use when sorting results.
-  # Possible values: `file`, `linter`, and `severity`.
-  #
-  # If the severity values are inside the following list, they are ordered in this order:
-  #   1. error
-  #   2. warning
-  #   3. high
-  #   4. medium
-  #   5. low
-  # Either they are sorted alphabetically.
-  #
-  # Default: ["linter", "file"]
-  sort-order:
-    - linter
-    - severity
-    - file # filepath, line, and column.
-
-  # Show statistics per linter.
-  # Default: true
-  show-stats: false
-
-
 # Options for analysis running.
 run:
   # Timeout for total work, e.g. 30s, 5m, 5m30s.
@@ -4248,8 +4143,7 @@ run:
 
   # List of build tags, all linters use it.
   # Default: []
-  build-tags:
-    - mytag
+  build-tags: []
 
   # If set, we pass it to "go list -mod={option}". From "go help modules":
   # If invoked with -mod=readonly, the go command is disallowed from the implicit
@@ -4282,34 +4176,3 @@ run:
   # Default: 0 (automatically set to match Linux container CPU quota and
   # fall back to the number of logical CPUs in the machine)
   concurrency: 4
-
-
-severity:
-  # Set the default severity for issues.
-  #
-  # If severity rules are defined and the issues do not match or no severity is provided to the rule
-  # this will be the default severity applied.
-  # Severities should match the supported severity names of the selected out format.
-  # - Code climate: https://docs.codeclimate.com/docs/issues#issue-severity
-  # - Checkstyle: https://checkstyle.sourceforge.io/property_types.html#SeverityLevel
-  # - GitHub: https://help.github.com/en/actions/reference/workflow-commands-for-github-actions#setting-an-error-message
-  # - TeamCity: https://www.jetbrains.com/help/teamcity/service-messages.html#Inspection+Instance
-  #
-  # `@linter` can be used as severity value to keep the severity from linters (e.g. revive, gosec, ...)
-  #
-  # Default: ""
-  default: error
-
-  # When a list of severity rules are provided, severity information will be added to lint issues.
-  # Severity rules have the same filtering capability as exclude rules
-  # except you are allowed to specify one matcher per severity rule.
-  #
-  # `@linter` can be used as severity value to keep the severity from linters (e.g. revive, gosec, ...)
-  #
-  # Only affects out formats that support setting severity information.
-  #
-  # Default: []
-  rules:
-    - linters:
-        - dupl
-      severity: info

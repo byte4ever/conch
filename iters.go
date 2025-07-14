@@ -1,3 +1,5 @@
+// Package conch provides stream processing utilities for Go applications.
+// This file implements bidirectional conversion between Go iterators and channels.
 package conch
 
 import (
@@ -6,11 +8,16 @@ import (
 	"sync"
 )
 
+// Pair represents a key-value pair used in iterator sequence conversions.
+// It provides a convenient way to handle two-parameter iterators with channels.
 type Pair[Key any, Value any] struct {
-	Key   Key
-	Value Value
+	Key   Key   // The key component of the pair.
+	Value Value // The value component of the pair.
 }
 
+// ChanToIterSeq converts a channel to an iterator sequence.
+// It reads values from the input channel and yields them through the iterator interface,
+// respecting context cancellation and proper channel closure.
 func ChanToIterSeq[T any](ctx context.Context, input <-chan T) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for {
@@ -30,6 +37,9 @@ func ChanToIterSeq[T any](ctx context.Context, input <-chan T) iter.Seq[T] {
 	}
 }
 
+// IterSeqToChan converts an iterator sequence to a channel.
+// It spawns a goroutine to iterate through the sequence and send values to the output channel,
+// providing integration between Go's iterator interface and channel-based streams.
 func IterSeqToChan[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -57,6 +67,9 @@ func IterSeqToChan[T any](
 	return outputChan
 }
 
+// ChanToIterSeq2 converts a channel of Pair values to a two-parameter iterator sequence.
+// It reads Pair values from the input channel and yields them as separate key-value parameters,
+// respecting context cancellation and proper channel closure.
 func ChanToIterSeq2[Key any, Value any](
 	ctx context.Context,
 	input <-chan *Pair[Key, Value],
@@ -79,6 +92,9 @@ func ChanToIterSeq2[Key any, Value any](
 	}
 }
 
+// IterSeq2ToChan converts a two-parameter iterator sequence to a channel of Pair values.
+// It spawns a goroutine to iterate through the sequence and send Pair values to the output channel,
+// providing integration between Go's two-parameter iterator interface and channel-based streams.
 func IterSeq2ToChan[Key any, Value any](
 	ctx context.Context,
 	wg *sync.WaitGroup,

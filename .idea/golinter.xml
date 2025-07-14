@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GoLinterSettings">
+    <option name="concurrency" value="32" />
+    <option name="customConfigFile" value="$PROJECT_DIR$/.golangci.yaml" />
+    <option name="enabledLinters">
+      <list>
+        <option value="decorder" />
+        <option value="predeclared" />
+        <option value="goconst" />
+        <option value="testableexamples" />
+        <option value="forcetypeassert" />
+        <option value="dogsled" />
+        <option value="gocognit" />
+        <option value="maintidx" />
+        <option value="nestif" />
+        <option value="ineffassign" />
+        <option value="grouper" />
+        <option value="wsl" />
+        <option value="nakedret" />
+        <option value="bidichk" />
+        <option value="promlinter" />
+        <option value="prealloc" />
+        <option value="inamedparam" />
+        <option value="dupl" />
+        <option value="gomnd" />
+        <option value="misspell" />
+        <option value="gomoddirectives" />
+        <option value="tagliatelle" />
+        <option value="gochecknoinits" />
+        <option value="nosprintfhostport" />
+        <option value="lll" />
+        <option value="dupword" />
+        <option value="asciicheck" />
+        <option value="nolintlint" />
+        <option value="gomodguard" />
+        <option value="godox" />
+        <option value="gofmt" />
+        <option value="tagalign" />
+        <option value="usestdlibvars" />
+        <option value="interfacebloat" />
+        <option value="godot" />
+        <option value="goimports" />
+        <option value="goprintffuncname" />
+        <option value="gocheckcompilerdirectives" />
+      </list>
+    </option>
+    <option name="fastOnly" value="false" />
+    <option name="linterSelected" value="true" />
+    <option name="useCustomConfigFile" value="true" />
+  </component>
+</project>

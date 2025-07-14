@@ -1,3 +1,5 @@
+// Package conch provides stream processing utilities for Go applications.
+// This file implements stream mirroring functionality for replicating data flows.
 package conch
 
 import (
@@ -5,8 +7,13 @@ import (
 	"sync"
 )
 
+// replicaPanicMsg is the error message displayed when invalid replica count is provided.
 const replicaPanicMsg = "invalid mirror replicaCount"
 
+// tee splits a single input stream into two identical output streams.
+// It reads from inStream and sends each value to both output channels.
+// The function uses a select statement to ensure both outputs receive the same data
+// while respecting context cancellation.
 func tee[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -40,6 +47,10 @@ func tee[T any](
 	return outStream1, outStream2
 }
 
+// recBuildTeeTree recursively builds a binary tree structure for stream mirroring.
+// It optimizes the mirroring process by creating a balanced tree that minimizes
+// latency variance between output streams. This function is used internally
+// by MirrorLowLatency to ensure homogeneous latency distribution.
 func recBuildTeeTree[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -104,6 +115,9 @@ func MirrorHighThroughput[T any](
 	return outStreams
 }
 
+// MirrorsHighThroughputC creates a chainable function for high-throughput stream mirroring.
+// It wraps MirrorHighThroughput to work with the ChainFunc interface, allowing it to be
+// composed with other stream operations in a processing pipeline.
 func MirrorsHighThroughputC[T any](
 	replicas int,
 	chains ChainsFunc[T],
@@ -144,6 +158,9 @@ func MirrorLowLatency[T any](
 	return outStreams
 }
 
+// MirrorsLowLatencyC creates a chainable function for low-latency stream mirroring.
+// It wraps MirrorLowLatency to work with the ChainFunc interface, allowing it to be
+// composed with other stream operations in a processing pipeline.
 func MirrorsLowLatencyC[T any](
 	replicas int,
 	chains ChainsFunc[T],

@@ -1,3 +1,5 @@
+// Package conch provides stream processing utilities for Go applications.
+// This file implements iterator injection functionality for converting Go iterators to channels.
 package conch
 
 import (
@@ -6,6 +8,9 @@ import (
 	"sync"
 )
 
+// iterInjectorCore handles the core logic of converting an iterator sequence to a channel.
+// It iterates through the sequence and sends each value to the output channel,
+// respecting context cancellation.
 func iterInjectorCore[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -26,6 +31,9 @@ func iterInjectorCore[T any](
 	}
 }
 
+// IterInjector converts an iterator sequence to a channel for stream processing.
+// It creates a buffered channel and spawns a goroutine to feed the iterator values
+// into the channel, providing integration between Go's iterator interface and channel-based streams.
 func IterInjector[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
@@ -44,6 +52,8 @@ func IterInjector[T any](
 	return output
 }
 
+// IterInjectorC creates a chainable iterator injector that integrates with the ChainsFunc interface.
+// It converts an iterator sequence to a channel and passes it to the chains function for further processing.
 func IterInjectorC[T any](
 	ctx context.Context,
 	wg *sync.WaitGroup,
